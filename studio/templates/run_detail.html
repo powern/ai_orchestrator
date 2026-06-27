@@ -13,6 +13,21 @@
 <h3>Planner Output</h3>
 <pre>{{ run.planner_output or 'No planner output yet.' }}</pre>
 
+<h3>Coder Output</h3>
+<pre>{{ run.coder_output or 'No coder output yet.' }}</pre>
+
+<h3>First Tester Output</h3>
+<pre>{{ run.tester_output_before_fix or run.tester_output or 'No tester output yet.' }}</pre>
+
+<h3>Fix Actions</h3>
+<pre>{{ run.fix_output or 'No fix output yet.' }}</pre>
+
+<h3>Second Tester Output</h3>
+<pre>{{ run.tester_output_after_fix or 'No post-fix tester output yet.' }}</pre>
+
+<h3>Bug Report</h3>
+<pre>{{ run.bug_report or 'No bug report yet.' }}</pre>
+
 <h3>Events</h3>
 
 

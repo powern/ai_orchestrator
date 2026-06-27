@@ -68,7 +68,7 @@ def sanitize_fix_output(run_id, fix_output):
         indent=2,
     )
 
-    save_stage_output(run_id, "coder_output", normalized_output)
+    save_stage_output(run_id, "fix_output", normalized_output)
 
     add_event(
         run_id,
@@ -171,6 +171,11 @@ class RunPipeline:
             run_id,
             project["workspace_path"],
         )
+        save_stage_output(
+            run_id,
+            "tester_output_before_fix",
+            str(tester_result.to_dict()),
+        )
 
         if tester_result.success:
             update_run_status(
@@ -239,6 +244,11 @@ class RunPipeline:
         tester_result = run_tester_stage(
             run_id,
             project["workspace_path"],
+        )
+        save_stage_output(
+            run_id,
+            "tester_output_after_fix",
+            str(tester_result.to_dict()),
         )
 
         if tester_result.success:

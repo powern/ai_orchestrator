@@ -30,6 +30,15 @@ def migrate():
         if "bug_report" not in columns:
             conn.execute("ALTER TABLE runs ADD COLUMN bug_report TEXT")
 
+        if "fix_output" not in columns:
+            conn.execute("ALTER TABLE runs ADD COLUMN fix_output TEXT")
+
+        if "tester_output_before_fix" not in columns:
+            conn.execute("ALTER TABLE runs ADD COLUMN tester_output_before_fix TEXT")
+
+        if "tester_output_after_fix" not in columns:
+            conn.execute("ALTER TABLE runs ADD COLUMN tester_output_after_fix TEXT")
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS project_runtime (
                 project_id INTEGER PRIMARY KEY,

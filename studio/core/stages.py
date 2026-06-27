@@ -219,7 +219,7 @@ def run_tester_stage(run_id, workspace_path):
     if not tester_result.success:
         try:
             from studio.core.bug_report import BugReportBuilder
-            from studio.core.fix_prompt import FixPromptBuilder
+            from studio.core.fix_prompt import FixPromptBuilder, FixWorkspaceContextBuilder
 
             bug_report = BugReportBuilder().build(tester_result)
             save_stage_output(run_id, "bug_report", bug_report)
@@ -229,6 +229,8 @@ def run_tester_stage(run_id, workspace_path):
             fix_prompt = FixPromptBuilder().build(
                 original_coder_output=coder_output,
                 tester_result=tester_result,
+                task_description=get_task_description_for_run(run_id),
+                workspace_files=FixWorkspaceContextBuilder().build(workspace_path, tester_result),
             )
 
             save_stage_output(run_id, "result", fix_prompt)
@@ -262,7 +264,7 @@ def run_tester_stage(run_id, workspace_path):
 
 def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
     from studio.config.settings import DEFAULT_MODELS
-    from studio.core.fix_prompt import FixPromptBuilder
+    from studio.core.fix_prompt import FixPromptBuilder, FixWorkspaceContextBuilder
 
     update_run_status(run_id, "running", "fix")
 
@@ -274,10 +276,14 @@ def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
     )
 
     adapter = LLMAdapter()
+    task_description = get_task_description_for_run(run_id)
+    workspace_files = FixWorkspaceContextBuilder().build(workspace_path, tester_result)
 
     fix_prompt = FixPromptBuilder().build(
         original_coder_output=coder_output,
         tester_result=tester_result,
+        task_description=task_description,
+        workspace_files=workspace_files,
     )
 
     fix_output = adapter.ask(
@@ -286,6 +292,8 @@ def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
         user_prompt=fix_prompt,
         json_mode=True,
     )
+
+    save_stage_output(run_id, "fix_output", fix_output)
 
     add_event(
         run_id,
@@ -307,6 +315,26 @@ def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
         "output": fix_output,
         "results": None,
     }
+
+
+def get_task_description_for_run(run_id):
+    from studio.database.db import get_connection
+
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT projects.description
+            FROM runs
+            JOIN projects ON projects.id = runs.project_id
+            WHERE runs.id = ?
+            """,
+            (run_id,),
+        ).fetchone()
+
+    if row is None:
+        return None
+
+    return row["description"]
 
 
 def run_architect_stage(run_id, planner_output):
