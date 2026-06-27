@@ -10,3 +10,4 @@ class RunEvent:
     stage: str
     message: str
     payload: Any = None
+    event_id: int | None = None

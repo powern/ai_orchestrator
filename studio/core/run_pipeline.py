@@ -1,5 +1,6 @@
 import json
 from studio.database.db import get_connection
+from studio.core.json_utils import normalize_coder_json
 from studio.core.stages import (
     run_architect_stage,
     run_coder_placeholder,
@@ -97,7 +98,7 @@ class RunPipeline:
         )
 
         static_review = StaticReviewerAgent().review(
-            json.loads(coder_output),
+            normalize_coder_json(coder_output),
         )
 
         add_event(

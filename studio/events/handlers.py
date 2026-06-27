@@ -32,5 +32,5 @@ class RuntimeHandler:
             current_stage=event.stage,
             current_agent=event.stage,
             message=event.message,
-            last_event_id=None,
+            last_event_id=event.event_id,
         )

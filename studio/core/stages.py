@@ -124,16 +124,6 @@ Generate executor actions now.
         model=DEFAULT_MODELS["coder"],
     )
 
-    sanitized_output = sanitizer.sanitize(coder_output)
-
-    add_event(
-        run_id,
-        "coder_sanitized",
-        "coder",
-        "Coder output sanitized to Executor JSON.",
-        sanitized_output,
-    )
-
     pipeline_result = sanitizer.process(
         coder_output,
         max_attempts=2,
@@ -146,6 +136,14 @@ Generate executor actions now.
     )
 
     save_stage_output(run_id, "coder_output", normalized_output)
+
+    add_event(
+        run_id,
+        "coder_sanitized",
+        "coder",
+        "Coder output sanitized to Executor JSON.",
+        normalized_output,
+    )
 
     add_event(
         run_id,
@@ -256,8 +254,6 @@ def run_tester_stage(run_id, workspace_path):
 def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
     from studio.config.settings import DEFAULT_MODELS
     from studio.core.fix_prompt import FixPromptBuilder
-    from studio.executor.actions import execute_actions
-    from studio.core.json_utils import normalize_coder_json
 
     update_run_status(run_id, "running", "fix")
 
@@ -290,22 +286,17 @@ def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
         fix_output,
     )
 
-    actions = normalize_coder_json(fix_output)
-    results = execute_actions(workspace_path, actions)
-
-    result_text = str(results)
-
     add_event(
         run_id,
         "fix_completed",
         "fix",
-        "Fix actions executed.",
-        result_text,
+        "Fix actions generated and waiting for sanitizer/static review.",
+        fix_output,
     )
 
     return {
         "output": fix_output,
-        "results": results,
+        "results": None,
     }
 
 

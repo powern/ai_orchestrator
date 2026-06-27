@@ -1,7 +1,7 @@
 from studio.core.stages import run_architect_placeholder
 from studio.database.db import init_db
 from studio.database.migrations import migrate
-from studio.services.project_service import create_project
+from studio.services.project_service import create_project, get_project
 from studio.services.run_service import create_run, get_run
 from studio.services.event_service import list_events
 
@@ -159,11 +159,10 @@ def test_run_tester_stage_runs_pytest_in_workspace():
     assert "tester_completed" in event_types
 
 
-def test_run_fix_stage_executes_fix_actions(monkeypatch):
+def test_run_fix_stage_generates_fix_actions_without_execution(monkeypatch):
     from pathlib import Path
     from studio.core import stages
     from studio.core.stages import run_fix_stage
-    from studio.config.settings import WORKSPACES_DIR
     from studio.core.tester_result import StageTestResult
 
     class FakeLLMAdapter:
@@ -189,7 +188,7 @@ def test_run_fix_stage_executes_fix_actions(monkeypatch):
     )
     run_id = create_run(project_id)
 
-    workspace = WORKSPACES_DIR / "fix-stage-test"
+    workspace = Path(get_project(project_id)["workspace_path"])
     app_dir = workspace / "app"
     app_dir.mkdir(parents=True, exist_ok=True)
 
@@ -206,15 +205,16 @@ def test_run_fix_stage_executes_fix_actions(monkeypatch):
         stderr="assertion failed",
     )
 
-    results = run_fix_stage(
+    result = run_fix_stage(
         run_id,
         str(workspace),
         "original coder output",
         tester_result,
     )
 
-    assert results["results"][0]["ok"] is True
-    assert "fixed" in (app_dir / "main.py").read_text(encoding="utf-8")
+    assert result["results"] is None
+    assert "fixed" in result["output"]
+    assert "broken" in (app_dir / "main.py").read_text(encoding="utf-8")
 
     events = list_events(run_id)
     event_types = [event["event_type"] for event in events]
