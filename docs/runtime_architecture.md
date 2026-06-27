@@ -95,6 +95,9 @@ python -m studio.scheduler.worker
 Generated workspaces, local DBs, caches, and virtual environments are ignored by
 Git.
 
+For complete repository hygiene and CI verification commands, see
+`docs/repository_hygiene.md`.
+
 ## Extension Points
 
 Future integrations should implement narrow backend interfaces from

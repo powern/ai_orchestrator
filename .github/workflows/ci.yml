@@ -1,12 +1,17 @@
-name: CI
+name: Repository Verification
 
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  quality:
+    name: Quality Gates
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,8 +21,14 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install flake8 ruff black
+          python -m pip install -r requirements-dev.txt
+      - name: Repository hygiene
+        shell: bash
+        run: |
+          if git ls-files | grep -E '(__pycache__|\.pyc$|studio/workspaces/|\.pytest_cache|\.db$|\.sqlite3?$|\.log$)'; then
+            echo "Generated/runtime artifacts are tracked by Git."
+            exit 1
+          fi
       - name: Validate imports
         run: python -m compileall -q -x "studio[/\\]workspaces" agents core studio tests
       - name: Black
