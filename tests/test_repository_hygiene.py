@@ -6,10 +6,12 @@ from shutil import which
 def test_no_generated_artifacts_are_tracked_by_git():
     git = which("git") or r"C:\Program Files\Git\cmd\git.exe"
     assert Path(git).exists() or which("git")
+    repo_root = Path(__file__).resolve().parents[1]
 
     result = subprocess.run(
-        [git, "ls-files"],
+        [git, "-c", f"safe.directory={repo_root}", "ls-files"],
         capture_output=True,
+        cwd=repo_root,
         text=True,
         check=True,
     )

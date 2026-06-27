@@ -4,6 +4,7 @@ exclude =
     .git,
     .venv,
     venv,
+    fresh_clone_verify,
     studio/workspaces
 extend-ignore =
     E203,

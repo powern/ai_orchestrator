@@ -6,6 +6,7 @@ exclude = '''
   \.git
   | \.venv
   | venv
+  | fresh_clone_verify
   | studio/workspaces
 )/
 '''
@@ -13,7 +14,7 @@ exclude = '''
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-exclude = ["studio/workspaces", ".venv", "venv"]
+exclude = ["studio/workspaces", ".venv", "venv", "fresh_clone_verify"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

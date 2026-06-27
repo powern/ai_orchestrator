@@ -32,16 +32,16 @@ systemctl status ai-studio-scheduler.service --no-pager
 
 ```bash
 pip install -r requirements-dev.txt
-python -m compileall -q -x "studio[/\\]workspaces" agents core studio tests
+python tools/compile_sources.py
 black --check .
 ruff check .
 flake8 .
 pytest -q
 ```
 
-`compileall` intentionally excludes `studio/workspaces` for local verification
-because workspaces are generated runtime data and may contain broken projects
-created during repair tests or production experiments.
+`tools/compile_sources.py` intentionally excludes `studio/workspaces` for local
+verification because workspaces are generated runtime data and may contain
+broken projects created during repair tests or production experiments.
 
 ## GitHub Actions Verification
 

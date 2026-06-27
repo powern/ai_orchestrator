@@ -3,6 +3,7 @@ venv/
 env/
 .tmp/
 tmp/
+fresh_clone_verify/
 __pycache__/
 *.py[cod]
 *$py.class

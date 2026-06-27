@@ -30,7 +30,7 @@ jobs:
             exit 1
           fi
       - name: Validate imports
-        run: python -m compileall -q -x "studio[/\\]workspaces" agents core studio tests
+        run: python tools/compile_sources.py
       - name: Black
         run: black --check .
       - name: Ruff
