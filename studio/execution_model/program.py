@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Iterable
 
 
 @dataclass
@@ -23,7 +24,32 @@ class ExecutorAction:
         if self.command is not None:
             data["command"] = self.command
 
+        data.update(self.metadata)
         return data
+
+    @classmethod
+    def from_dict(cls, data):
+        if not isinstance(data, dict):
+            raise ValueError("Executor action must be an object")
+
+        known_fields = {
+            "action",
+            "path",
+            "content",
+            "command",
+        }
+
+        return cls(
+            action=data.get("action"),
+            path=data.get("path"),
+            content=data.get("content"),
+            command=data.get("command"),
+            metadata={
+                key: value
+                for key, value in data.items()
+                if key not in known_fields
+            },
+        )
 
 
 @dataclass
@@ -32,25 +58,22 @@ class ExecutorProgram:
 
     @classmethod
     def from_dicts(cls, actions):
-        return cls(
-            actions=[
-                ExecutorAction(
-                    action=item.get("action"),
-                    path=item.get("path"),
-                    content=item.get("content"),
-                    command=item.get("command"),
-                    metadata={
-                        key: value
-                        for key, value in item.items()
-                        if key not in ("action", "path", "content", "command")
-                    },
-                )
-                for item in actions
-            ]
-        )
+        if isinstance(actions, cls):
+            return actions
+
+        if not isinstance(actions, Iterable) or isinstance(actions, (str, bytes)):
+            raise ValueError("Executor program must be a list of actions")
+
+        return cls(actions=[ExecutorAction.from_dict(item) for item in actions])
 
     def to_dicts(self):
         return [
             action.to_dict()
             for action in self.actions
         ]
+
+    def __iter__(self):
+        return iter(self.actions)
+
+    def __len__(self):
+        return len(self.actions)

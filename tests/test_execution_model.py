@@ -36,6 +36,7 @@ def test_executor_program_roundtrip_from_dicts():
             "action": "write_file",
             "path": "app/main.py",
             "content": "print(1)",
+            "extra": "ignored",
         },
         {
             "action": "run",

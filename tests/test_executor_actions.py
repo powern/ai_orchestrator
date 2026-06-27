@@ -50,6 +50,22 @@ def test_executor_rejects_path_outside_workspace():
         resolve_safe_path(str(workspace), "../../studio/app.py")
 
 
+def test_executor_rejects_workspace_prefix_escape():
+    workspace = make_workspace("safe")
+    sibling = workspace.parent / "safe-evil"
+    sibling.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(ExecutorError):
+        resolve_safe_path(str(workspace), "../safe-evil/file.txt")
+
+
+def test_executor_rejects_absolute_path():
+    workspace = make_workspace()
+
+    with pytest.raises(ExecutorError):
+        resolve_safe_path(str(workspace), str(Path.cwd() / "outside.txt"))
+
+
 def test_executor_rejects_workspace_outside_allowed_root():
     results = execute_actions(
         "/tmp",
@@ -75,6 +91,23 @@ def test_executor_rejects_unsafe_command():
             {
                 "action": "run",
                 "command": "rm -rf /",
+            }
+        ],
+    )
+
+    assert results[0]["ok"] is False
+    assert "not allowed" in results[0]["error"]
+
+
+def test_executor_rejects_python_module_escape_command():
+    workspace = make_workspace()
+
+    results = execute_actions(
+        str(workspace),
+        [
+            {
+                "action": "run",
+                "command": "python -m http.server",
             }
         ],
     )

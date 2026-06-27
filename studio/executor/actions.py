@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from studio.config.settings import WORKSPACES_DIR
+from studio.execution_model.program import ExecutorAction, ExecutorProgram
 
 
 class ExecutorError(Exception):
@@ -12,10 +13,17 @@ class ExecutorError(Exception):
 
 
 def resolve_safe_path(workspace_path, relative_path):
-    workspace = Path(workspace_path).resolve()
-    target = (workspace / relative_path).resolve()
+    if not relative_path:
+        raise ExecutorError("Path is required")
 
-    if not str(target).startswith(str(workspace)):
+    candidate = Path(relative_path)
+    if candidate.is_absolute():
+        raise ExecutorError(f"Absolute paths are not allowed: {relative_path}")
+
+    workspace = Path(workspace_path).resolve()
+    target = (workspace / candidate).resolve()
+
+    if target != workspace and workspace not in target.parents:
         raise ExecutorError(f"Path is outside workspace: {relative_path}")
 
     return target
@@ -42,24 +50,32 @@ def action_read_file(workspace_path, path):
 
 
 def action_run(workspace_path, command, timeout=120):
+    if not isinstance(command, str) or not command.strip():
+        raise ExecutorError("Command is required")
+
     allowed_prefixes = [
         "pytest",
         "python -m pytest",
-        "python -m",
     ]
 
-    if not any(command.startswith(prefix) for prefix in allowed_prefixes):
+    normalized_command = command.strip()
+
+    if not any(
+        normalized_command == prefix
+        or normalized_command.startswith(f"{prefix} ")
+        for prefix in allowed_prefixes
+    ):
         raise ExecutorError(f"Command is not allowed: {command}")
 
-    if command.startswith("pytest"):
-        command = f"{sys.executable} -m " + command
+    if normalized_command.startswith("pytest"):
+        normalized_command = f"{sys.executable} -m {normalized_command}"
 
     workspace = Path(workspace_path).resolve()
     env = os.environ.copy()
     env["PYTHONPATH"] = str(workspace)
 
     result = subprocess.run(
-        command,
+        normalized_command,
         cwd=workspace,
         shell=True,
         text=True,
@@ -76,6 +92,9 @@ def action_run(workspace_path, command, timeout=120):
 
 
 def execute_action(workspace_path, action):
+    if isinstance(action, ExecutorAction):
+        action = action.to_dict()
+
     action_type = action.get("action")
 
     if not workspace_path:
@@ -83,7 +102,9 @@ def execute_action(workspace_path, action):
 
     workspace = Path(workspace_path).resolve()
 
-    if not str(workspace).startswith(str(WORKSPACES_DIR.resolve())):
+    workspace_root = WORKSPACES_DIR.resolve()
+
+    if workspace != workspace_root and workspace_root not in workspace.parents:
         raise ExecutorError(f"Workspace is outside allowed root: {workspace}")
 
     if action_type == "mkdir":
@@ -106,20 +127,22 @@ def execute_action(workspace_path, action):
 
 
 def execute_actions(workspace_path, actions):
+    program = ExecutorProgram.from_dicts(actions)
     results = []
 
-    for action in actions:
+    for action in program:
+        action_dict = action.to_dict()
         try:
             output = execute_action(workspace_path, action)
             results.append({
                 "ok": True,
-                "action": action,
+                "action": action_dict,
                 "output": output,
             })
         except Exception as exc:
             results.append({
                 "ok": False,
-                "action": action,
+                "action": action_dict,
                 "error": str(exc),
             })
             break
