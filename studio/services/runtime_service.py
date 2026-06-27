@@ -1,4 +1,6 @@
 from studio.database.db import get_connection
+from studio.events.handlers import RuntimeHandler
+from studio.events.run_events import RunEvent
 
 
 STAGE_PROGRESS = {
@@ -89,3 +91,47 @@ def get_project_runtime(project_id):
             """,
             (project_id,),
         ).fetchone()
+
+
+def rebuild_runtime_projection(project_id):
+    with get_connection() as conn:
+        conn.execute(
+            "DELETE FROM project_runtime WHERE project_id = ?",
+            (project_id,),
+        )
+        rows = conn.execute(
+            """
+            SELECT
+                run_events.id AS event_id,
+                run_events.run_id AS run_id,
+                runs.project_id AS project_id,
+                run_events.event_type AS event_type,
+                run_events.stage AS stage,
+                run_events.message AS message,
+                run_events.payload AS payload
+            FROM run_events
+            JOIN runs ON runs.id = run_events.run_id
+            WHERE runs.project_id = ?
+            ORDER BY run_events.id ASC
+            """,
+            (project_id,),
+        ).fetchall()
+        conn.commit()
+
+    handler = RuntimeHandler()
+    runtime = None
+
+    for row in rows:
+        runtime = handler(
+            RunEvent(
+                event_id=row["event_id"],
+                run_id=row["run_id"],
+                project_id=row["project_id"],
+                event_type=row["event_type"],
+                stage=row["stage"],
+                message=row["message"],
+                payload=row["payload"],
+            )
+        )
+
+    return runtime or get_project_runtime(project_id)

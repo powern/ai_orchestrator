@@ -1,4 +1,5 @@
 from studio.core.agent import BaseAgent
+from studio.execution_model.program import ExecutorProgram
 from studio.reviewer.result import ReviewerResult
 
 
@@ -7,10 +8,12 @@ class StaticReviewerAgent(BaseAgent):
 
     def process(self, actions: list) -> ReviewerResult:
         findings = []
+        program = ExecutorProgram.from_dicts(actions)
 
         seen_paths = set()
 
-        for action in actions:
+        for executor_action in program:
+            action = executor_action.to_dict()
             action_type = action.get("action")
             path = action.get("path")
 

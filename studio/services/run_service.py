@@ -1,6 +1,9 @@
 from studio.database.db import get_connection
 
 
+ACTIVE_RUN_STATUSES = ("queued", "running")
+
+
 def create_run(project_id):
     with get_connection() as conn:
         cur = conn.execute(
@@ -12,6 +15,51 @@ def create_run(project_id):
         )
         conn.commit()
         return cur.lastrowid
+
+
+def get_active_run_for_project(project_id):
+    with get_connection() as conn:
+        return conn.execute(
+            """
+            SELECT *
+            FROM runs
+            WHERE project_id = ?
+              AND status IN ('queued', 'running')
+            ORDER BY id ASC
+            LIMIT 1
+            """,
+            (project_id,),
+        ).fetchone()
+
+
+def create_run_if_not_active(project_id):
+    with get_connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        active_run = conn.execute(
+            """
+            SELECT *
+            FROM runs
+            WHERE project_id = ?
+              AND status IN ('queued', 'running')
+            ORDER BY id ASC
+            LIMIT 1
+            """,
+            (project_id,),
+        ).fetchone()
+
+        if active_run is not None:
+            conn.commit()
+            return active_run["id"], False
+
+        cur = conn.execute(
+            """
+            INSERT INTO runs (project_id, status, current_stage)
+            VALUES (?, 'queued', 'queued')
+            """,
+            (project_id,),
+        )
+        conn.commit()
+        return cur.lastrowid, True
 
 
 def list_runs_for_project(project_id):

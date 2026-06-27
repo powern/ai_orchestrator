@@ -3,6 +3,8 @@ from studio.database.migrations import migrate
 from studio.services.project_service import create_project
 from studio.services.run_service import create_run, get_next_queued_run, get_run
 from studio.services.event_service import list_events
+from studio.services.project_service import get_project
+from studio.services.runtime_service import get_project_runtime
 from studio.scheduler import worker
 from studio.core import stages
 
@@ -56,6 +58,7 @@ def test_scheduler_processes_next_queued_run(monkeypatch):
 
     expected_run = get_next_queued_run()
     expected_run_id = expected_run["id"]
+    expected_project_id = expected_run["project_id"]
 
     processed = worker.process_one_run()
 
@@ -67,6 +70,8 @@ def test_scheduler_processes_next_queued_run(monkeypatch):
     assert processed is True
     assert run["status"] == "completed"
     assert run["current_stage"] == "tester_completed"
+    assert get_project(expected_project_id)["status"] == "completed"
+    assert get_project_runtime(expected_project_id)["status"] == "completed"
     assert run["planner_output"]
     assert run["coder_output"]
     assert "scheduler" in event_types

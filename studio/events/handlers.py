@@ -2,8 +2,9 @@ class EventLogHandler:
     """
     Deprecated compatibility handler.
 
-    Event storage is now handled by studio.services.event_service.add_event().
-    This handler intentionally does nothing to avoid recursive add_event() calls.
+    Event storage is handled before projection by
+    studio.services.event_service.add_event(). This handler intentionally does
+    nothing to avoid recursive writes.
     """
 
     def __call__(self, event):

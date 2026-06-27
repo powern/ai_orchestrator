@@ -13,9 +13,6 @@ from studio.services.run_service import (
     update_run_status,
 )
 
-from studio.services.event_service import (
-    add_event,
-)
 from studio.events.publisher import publish_run_event
 from studio.reviewer.static_agent import StaticReviewerAgent
 from studio.core.tester_result import StageTestResult
@@ -23,6 +20,16 @@ from studio.core.llm_adapter import LLMAdapter
 from studio.config.settings import DEFAULT_MODELS
 from studio.sanitizer.agent import ActionSanitizerAgent
 from studio.services.run_service import save_stage_output
+
+
+def add_event(run_id, event_type, stage=None, message="", payload=None):
+    return publish_run_event(
+        run_id=run_id,
+        event_type=event_type,
+        stage=stage,
+        message=message,
+        payload=payload,
+    )
 
 
 

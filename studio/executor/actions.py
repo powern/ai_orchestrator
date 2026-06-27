@@ -56,6 +56,9 @@ def action_run(workspace_path, command, timeout=120):
     allowed_prefixes = [
         "pytest",
         "python -m pytest",
+        "python -m unittest",
+        "python3 -m pytest",
+        "python3 -m unittest",
     ]
 
     normalized_command = command.strip()
@@ -69,6 +72,10 @@ def action_run(workspace_path, command, timeout=120):
 
     if normalized_command.startswith("pytest"):
         normalized_command = f"{sys.executable} -m {normalized_command}"
+    elif normalized_command.startswith("python -m "):
+        normalized_command = f"{sys.executable} -m {normalized_command.removeprefix('python -m ')}"
+    elif normalized_command.startswith("python3 -m "):
+        normalized_command = f"{sys.executable} -m {normalized_command.removeprefix('python3 -m ')}"
 
     workspace = Path(workspace_path).resolve()
     env = os.environ.copy()

@@ -4,8 +4,9 @@ from studio.config.settings import FLASK_HOST, FLASK_PORT
 from studio.database.db import init_db
 from studio.database.migrations import migrate
 from studio.services.project_service import create_project, list_projects, get_project
-from studio.services.run_service import create_run, list_runs_for_project, get_run
-from studio.services.event_service import add_event, list_events
+from studio.events.publisher import publish_run_event
+from studio.services.run_service import create_run_if_not_active, list_runs_for_project, get_run
+from studio.services.event_service import list_events
 
 
 app = Flask(__name__)
@@ -55,9 +56,21 @@ def run_project(project_id):
     if project is None:
         abort(404)
 
-    run_id = create_run(project_id)
-    add_event(
+    run_id, created = create_run_if_not_active(project_id)
+
+    if not created:
+        publish_run_event(
+            run_id,
+            project_id,
+            event_type="run_already_active",
+            stage="queued",
+            message="An active run already exists for this project.",
+        )
+        return redirect(url_for("run_detail", run_id=run_id))
+
+    publish_run_event(
         run_id,
+        project_id,
         event_type="run_created",
         stage="queued",
         message="Run was created and added to queue.",

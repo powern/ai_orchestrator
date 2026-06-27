@@ -3,8 +3,18 @@ from studio.core.llm_adapter import LLMAdapter
 from studio.coder.pipeline import CoderPipeline
 from studio.sanitizer.agent import ActionSanitizerAgent
 from studio.core.tester_result import StageTestResult
-from studio.services.event_service import add_event
+from studio.events.publisher import publish_run_event
 from studio.services.run_service import save_stage_output, update_run_status, get_stage_output
+
+
+def add_event(run_id, event_type, stage=None, message="", payload=None):
+    return publish_run_event(
+        run_id=run_id,
+        event_type=event_type,
+        stage=stage,
+        message=message,
+        payload=payload,
+    )
 
 
 def run_architect_placeholder(run_id, planner_output):

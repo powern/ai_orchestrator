@@ -9,9 +9,21 @@
 <h3>Description</h3>
 <pre>{{ project.description }}</pre>
 
-<form method="post" action="/projects/{{ project.id }}/run">
-    <button class="btn btn-green" type="submit">Run Orchestrator</button>
+<form method="post" action="/projects/{{ project.id }}/run" data-run-form>
+    <button class="btn btn-green" type="submit" data-run-button>Run Orchestrator</button>
 </form>
+
+<script>
+document.querySelectorAll("[data-run-form]").forEach((form) => {
+    form.addEventListener("submit", () => {
+        const button = form.querySelector("[data-run-button]");
+        if (button) {
+            button.disabled = true;
+            button.textContent = "Starting...";
+        }
+    });
+});
+</script>
 
 <h3>Runs</h3>
 

@@ -116,6 +116,20 @@ def test_executor_rejects_python_module_escape_command():
     assert "not allowed" in results[0]["error"]
 
 
+def test_action_run_normalizes_python_unittest_to_current_interpreter(tmp_path):
+    (tmp_path / "test_sample.py").write_text(
+        "import unittest\n\n"
+        "class SampleTest(unittest.TestCase):\n"
+        "    def test_ok(self):\n"
+        "        self.assertTrue(True)\n",
+        encoding="utf-8",
+    )
+
+    result = action_run(str(tmp_path), "python -m unittest discover")
+
+    assert result["returncode"] == 0
+
+
 def test_executor_accepts_json_actions_inside_workspace():
     workspace = make_workspace("executor-json-workspace")
 
