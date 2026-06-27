@@ -1,22 +1,7 @@
+from studio.config.settings import STAGE_PROGRESS
 from studio.database.db import get_connection
 from studio.events.handlers import RuntimeHandler
 from studio.events.run_events import RunEvent
-
-
-STAGE_PROGRESS = {
-    "queued": 0,
-    "planner": 10,
-    "architect": 20,
-    "coder": 35,
-    "static_reviewer": 50,
-    "executor": 65,
-    "tester": 80,
-    "reviewer": 90,
-    "tester_completed": 100,
-    "static_review_failed": 50,
-    "tester_failed": 80,
-    "pipeline_failed": 100,
-}
 
 
 def calculate_progress(stage, status):

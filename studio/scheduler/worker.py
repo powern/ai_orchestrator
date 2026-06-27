@@ -1,17 +1,20 @@
+import logging
 import time
 
-from studio.config.settings import DEFAULT_MODELS
+from studio.config.settings import DEFAULT_MODELS, SCHEDULER_POLL_INTERVAL_SECONDS
 from studio.core.llm_adapter import LLMAdapter
 from studio.core.run_pipeline import RunPipeline
-from studio.database.db import init_db, get_connection
+from studio.database.db import get_connection, init_db
 from studio.database.migrations import migrate
 from studio.events.publisher import publish_run_event
 from studio.services.project_status_service import update_project_status
 from studio.services.run_service import (
     get_next_queued_run,
-    update_run_status,
     save_stage_output,
+    update_run_status,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def get_project_for_run(run):
@@ -55,14 +58,16 @@ def run_planner_stage(run_id, project):
 def process_one_run():
     run = get_next_queued_run()
     if run is None:
-        print("Scheduler heartbeat: no queued runs", flush=True)
+        logger.info("Scheduler heartbeat: no queued runs")
         return False
 
-    print(f"Scheduler picked run #{run['id']}", flush=True)
+    logger.info("Scheduler picked run #%s", run["id"])
 
     run_id = run["id"]
 
-    publish_run_event(run_id, run["project_id"], "scheduler", "scheduler", "Scheduler picked queued run.")
+    publish_run_event(
+        run_id, run["project_id"], "scheduler", "scheduler", "Scheduler picked queued run."
+    )
     project = get_project_for_run(run)
 
     try:
@@ -70,6 +75,7 @@ def process_one_run():
         pipeline.execute(run_id, project)
 
     except Exception as exc:
+        logger.exception("Run #%s failed during scheduler processing", run_id)
         update_run_status(run_id, "failed", "pipeline_failed", str(exc))
         publish_run_event(run_id, project["id"], "run_failed", "pipeline_failed", str(exc))
 
@@ -80,16 +86,20 @@ def process_one_run():
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     init_db()
     migrate()
 
-    print("AI Studio Scheduler started", flush=True)
+    logger.info("AI Studio Scheduler started")
 
     while True:
         processed = process_one_run()
 
         if not processed:
-            time.sleep(5)
+            time.sleep(SCHEDULER_POLL_INTERVAL_SECONDS)
 
 
 if __name__ == "__main__":

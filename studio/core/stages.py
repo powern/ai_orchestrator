@@ -1,10 +1,11 @@
 import json
+
+from studio.config.settings import CODER_MAX_SANITIZE_ATTEMPTS
 from studio.core.llm_adapter import LLMAdapter
-from studio.coder.pipeline import CoderPipeline
-from studio.sanitizer.agent import ActionSanitizerAgent
 from studio.core.tester_result import StageTestResult
 from studio.events.publisher import publish_run_event
-from studio.services.run_service import save_stage_output, update_run_status, get_stage_output
+from studio.sanitizer.agent import ActionSanitizerAgent
+from studio.services.run_service import get_stage_output, save_stage_output, update_run_status
 
 
 def add_event(run_id, event_type, stage=None, message="", payload=None):
@@ -27,11 +28,7 @@ def run_architect_placeholder(run_id, planner_output):
         "Architect placeholder started.",
     )
 
-    architect_output = (
-        "ARCHITECT PLACEHOLDER\n\n"
-        "Input from planner:\n"
-        f"{planner_output}"
-    )
+    architect_output = "ARCHITECT PLACEHOLDER\n\n" "Input from planner:\n" f"{planner_output}"
 
     save_stage_output(run_id, "architect_output", architect_output)
 
@@ -136,7 +133,7 @@ Generate executor actions now.
 
     pipeline_result = sanitizer.process(
         coder_output,
-        max_attempts=2,
+        max_attempts=CODER_MAX_SANITIZE_ATTEMPTS,
     )
 
     normalized_output = json.dumps(
@@ -159,7 +156,10 @@ Generate executor actions now.
         run_id,
         "coder_completed",
         "coder",
-        f"LLM Coder completed. Attempts: {pipeline_result.attempts}, retried: {pipeline_result.retried}.",
+        (
+            "LLM Coder completed. "
+            f"Attempts: {pipeline_result.attempts}, retried: {pipeline_result.retried}."
+        ),
         normalized_output,
     )
 
@@ -167,8 +167,8 @@ Generate executor actions now.
 
 
 def run_executor_stage(run_id, workspace_path, coder_output):
-    from studio.executor.actions import execute_actions
     from studio.core.json_utils import normalize_coder_json
+    from studio.executor.actions import execute_actions
 
     update_run_status(run_id, "running", "executor")
 
@@ -258,7 +258,6 @@ def run_tester_stage(run_id, workspace_path):
         )
 
     return tester_result
-
 
 
 def run_fix_stage(run_id, workspace_path, coder_output, tester_result):

@@ -1,5 +1,5 @@
-from studio.coder.repair import repair
 from studio.coder.pipeline import CoderPipeline
+from studio.coder.repair import repair
 
 
 def strip_markdown_code_fence(text):

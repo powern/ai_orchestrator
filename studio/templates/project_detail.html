@@ -6,6 +6,26 @@
 <p>Status: <span class="status">{{ project.status }}</span></p>
 <p>Workspace: <span class="muted">{{ project.workspace_path }}</span></p>
 
+<h3>Runtime</h3>
+{% if runtime %}
+<p>Status: <span class="status status-{{ runtime.status }}">{{ runtime.status }}</span></p>
+<p>Current agent: {{ runtime.current_agent or 'none' }}</p>
+<p>Current stage: {{ runtime.current_stage or 'none' }}</p>
+<p>Progress: {{ runtime.progress }}%</p>
+<div class="progress"><div class="progress-bar" style="width: {{ runtime.progress }}%"></div></div>
+<p>Message: {{ runtime.message or '' }}</p>
+{% else %}
+<p class="muted">Runtime has not started.</p>
+{% endif %}
+
+<h3>Latest Event</h3>
+{% if latest_event %}
+<p><strong>#{{ latest_event.id }}</strong> {{ latest_event.event_type }} / {{ latest_event.stage or '' }}</p>
+<p>{{ latest_event.message or '' }}</p>
+{% else %}
+<p class="muted">No events yet.</p>
+{% endif %}
+
 <h3>Description</h3>
 <pre>{{ project.description }}</pre>
 
@@ -39,7 +59,7 @@ document.querySelectorAll("[data-run-form]").forEach((form) => {
     {% for run in runs %}
     <tr>
         <td><a href="/runs/{{ run.id }}">{{ run.id }}</a></td>
-        <td><span class="status">{{ run.status }}</span></td>
+        <td><span class="status status-{{ run.status }}">{{ run.status }}</span></td>
         <td>{{ run.current_stage }}</td>
         <td>{{ run.created_at }}</td>
         <td>{{ run.updated_at }}</td>

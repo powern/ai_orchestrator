@@ -1,7 +1,7 @@
 from studio.core.agent import BaseAgent
-from studio.sanitizer.validator import JsonValidator
-from studio.sanitizer.result import SanitizerResult
 from studio.sanitizer.repair_agent import ActionRepairAgent
+from studio.sanitizer.result import SanitizerResult
+from studio.sanitizer.validator import JsonValidator
 
 
 class ActionSanitizerAgent(BaseAgent):

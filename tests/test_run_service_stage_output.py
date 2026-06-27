@@ -3,8 +3,8 @@ from studio.database.migrations import migrate
 from studio.services.project_service import create_project
 from studio.services.run_service import (
     create_run,
-    save_stage_output,
     get_stage_output,
+    save_stage_output,
 )
 
 

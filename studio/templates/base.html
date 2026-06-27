@@ -12,6 +12,15 @@
         .btn-green { background: #198754; }
         .btn-secondary { background: #6c757d; }
         .status { padding: 4px 8px; border-radius: 6px; background: #eee; }
+        .status-running { background: #fff3cd; }
+        .status-completed { background: #d1e7dd; }
+        .status-failed { background: #f8d7da; }
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 16px 0; }
+        .metric { border: 1px solid #ddd; border-radius: 8px; padding: 12px; background: #fafafa; }
+        .metric strong { display: block; font-size: 24px; margin-top: 4px; }
+        .progress { background: #eee; border-radius: 999px; height: 10px; overflow: hidden; min-width: 100px; }
+        .progress-bar { background: #0d6efd; height: 100%; }
+        .event-message { max-width: 420px; }
         table { width: 100%; border-collapse: collapse; margin-top: 16px; }
         th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; vertical-align: top; }
         input, textarea { width: 100%; padding: 10px; margin: 6px 0 14px 0; box-sizing: border-box; }
@@ -28,7 +37,32 @@
         <a class="btn" href="/">Projects</a>
         <a class="btn" href="/projects/new">New Project</a>
     </div>
+    <main data-refresh-root>
     {% block content %}{% endblock %}
+    </main>
 </div>
+<script>
+const refreshRoot = document.querySelector("[data-refresh-root]");
+if (refreshRoot) {
+    window.setInterval(async () => {
+        if (document.hidden) {
+            return;
+        }
+        try {
+            const response = await fetch(window.location.href, {
+                headers: { "X-Requested-With": "fetch" },
+            });
+            const text = await response.text();
+            const nextDocument = new DOMParser().parseFromString(text, "text/html");
+            const nextRoot = nextDocument.querySelector("[data-refresh-root]");
+            if (nextRoot) {
+                refreshRoot.innerHTML = nextRoot.innerHTML;
+            }
+        } catch (error) {
+            console.debug("Auto refresh skipped", error);
+        }
+    }, 5000);
+}
+</script>
 </body>
 </html>

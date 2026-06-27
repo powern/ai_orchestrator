@@ -55,7 +55,6 @@ Do not explain anything.
 
         return json.loads(text)
 
-
     def ask_retry(self, model, original_output, error):
         retry_prompt = RetryPromptBuilder().build(
             original_output=original_output,

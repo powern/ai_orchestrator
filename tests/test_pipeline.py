@@ -1,4 +1,4 @@
-from studio.core.pipeline import get_pipeline_stages, FINAL_STAGE, FAILED_STAGE
+from studio.core.pipeline import FAILED_STAGE, FINAL_STAGE, get_pipeline_stages
 
 
 def test_pipeline_stages_order():

@@ -170,9 +170,7 @@ def test_action_run_sets_pythonpath_to_workspace(tmp_path):
     )
 
     (tests_dir / "test_main.py").write_text(
-        "from app.main import main\n\n"
-        "def test_main():\n"
-        "    assert main() == 'hello'\n",
+        "from app.main import main\n\n" "def test_main():\n" "    assert main() == 'hello'\n",
         encoding="utf-8",
     )
 

@@ -1,9 +1,9 @@
 from studio.core.stages import run_architect_placeholder
 from studio.database.db import init_db
 from studio.database.migrations import migrate
+from studio.services.event_service import list_events
 from studio.services.project_service import create_project, get_project
 from studio.services.run_service import create_run, get_run
-from studio.services.event_service import list_events
 
 
 def test_run_architect_placeholder_saves_output_and_events():
@@ -75,8 +75,9 @@ def test_run_coder_placeholder_saves_json_output_and_events(monkeypatch):
 
 def test_run_executor_stage_executes_coder_json_in_workspace():
     from pathlib import Path
-    from studio.core.stages import run_executor_stage
+
     from studio.config.settings import WORKSPACES_DIR
+    from studio.core.stages import run_executor_stage
 
     init_db()
     migrate()
@@ -113,8 +114,8 @@ def test_run_executor_stage_executes_coder_json_in_workspace():
 
 
 def test_run_tester_stage_runs_pytest_in_workspace():
-    from studio.core.stages import run_tester_stage
     from studio.config.settings import WORKSPACES_DIR
+    from studio.core.stages import run_tester_stage
 
     init_db()
     migrate()
@@ -134,15 +135,12 @@ def test_run_tester_stage_runs_pytest_in_workspace():
 
     (app_dir / "__init__.py").write_text("", encoding="utf-8")
     (app_dir / "main.py").write_text(
-        "def main():\n"
-        "    return 'hello'\n",
+        "def main():\n" "    return 'hello'\n",
         encoding="utf-8",
     )
 
     (tests_dir / "test_main.py").write_text(
-        "from app.main import main\n\n"
-        "def test_main():\n"
-        "    assert main() == 'hello'\n",
+        "from app.main import main\n\n" "def test_main():\n" "    assert main() == 'hello'\n",
         encoding="utf-8",
     )
 
@@ -161,6 +159,7 @@ def test_run_tester_stage_runs_pytest_in_workspace():
 
 def test_run_fix_stage_generates_fix_actions_without_execution(monkeypatch):
     from pathlib import Path
+
     from studio.core import stages
     from studio.core.stages import run_fix_stage
     from studio.core.tester_result import StageTestResult

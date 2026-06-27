@@ -3,21 +3,57 @@
 {% block content %}
 <h2>Projects</h2>
 
+<section class="dashboard">
+    <div class="metric">Projects<strong>{{ metrics.total_projects }}</strong></div>
+    <div class="metric">Queued<strong>{{ metrics.queued }}</strong></div>
+    <div class="metric">Running<strong>{{ metrics.running }}</strong></div>
+    <div class="metric">Completed<strong>{{ metrics.completed }}</strong></div>
+    <div class="metric">Failed<strong>{{ metrics.failed }}</strong></div>
+    <div class="metric">Runs<strong>{{ metrics.total_runs }}</strong></div>
+    <div class="metric">Success<strong>{{ metrics.success_rate }}%</strong></div>
+    <div class="metric">Scheduler<strong>{{ metrics.scheduler_status }}</strong></div>
+</section>
+
+{% if metrics.active_run %}
+<p>Active run: <a href="/runs/{{ metrics.active_run.id }}">#{{ metrics.active_run.id }}</a></p>
+{% else %}
+<p class="muted">No active run.</p>
+{% endif %}
+
 {% if projects %}
 <table>
     <tr>
         <th>ID</th>
         <th>Name</th>
         <th>Status</th>
-        <th>Workspace</th>
+        <th>Stage</th>
+        <th>Progress</th>
+        <th>Last Run</th>
+        <th>Indicator</th>
         <th>Created</th>
     </tr>
     {% for project in projects %}
     <tr>
         <td>{{ project.id }}</td>
         <td><a href="/projects/{{ project.id }}">{{ project.name }}</a></td>
-        <td><span class="status">{{ project.status }}</span></td>
-        <td class="muted">{{ project.workspace_path }}</td>
+        {% set status = project.runtime_status or project.status %}
+        <td><span class="status status-{{ status }}">{{ status }}</span></td>
+        <td>{{ project.runtime_stage or project.last_run_stage or 'new' }}</td>
+        <td>
+            {% set progress = project.runtime_progress or 0 %}
+            <div class="progress"><div class="progress-bar" style="width: {{ progress }}%"></div></div>
+            {{ progress }}%
+        </td>
+        <td>
+            {% if project.last_run_id %}
+                <a href="/runs/{{ project.last_run_id }}">#{{ project.last_run_id }}</a>
+            {% else %}
+                <span class="muted">none</span>
+            {% endif %}
+        </td>
+        <td>
+            {% if status == 'running' %}Running{% elif status == 'completed' %}Completed{% elif status == 'failed' %}Failed{% else %}Idle{% endif %}
+        </td>
         <td>{{ project.created_at }}</td>
     </tr>
     {% endfor %}

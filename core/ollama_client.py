@@ -43,4 +43,3 @@ class OllamaClient:
         )
         response.raise_for_status()
         return response.json().get("response", "")
-

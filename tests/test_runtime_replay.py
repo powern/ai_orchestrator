@@ -1,4 +1,4 @@
-from studio.database.db import get_connection, init_db
+from studio.database.db import init_db
 from studio.database.migrations import migrate
 from studio.events.publisher import publish_run_event
 from studio.services.project_service import create_project

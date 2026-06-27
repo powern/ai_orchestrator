@@ -1,10 +1,10 @@
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
 class PipelineResult:
-    actions: List[Dict[str, Any]]
+    actions: list[dict[str, Any]]
 
     raw_output: str
 
@@ -14,4 +14,4 @@ class PipelineResult:
 
     retried: bool = False
 
-    validation_error: Optional[str] = None
+    validation_error: str | None = None

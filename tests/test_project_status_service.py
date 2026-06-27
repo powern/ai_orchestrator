@@ -1,11 +1,11 @@
-from studio.database.db import init_db, get_connection
+from studio.database.db import get_connection, init_db
 from studio.database.migrations import migrate
 from studio.services.project_service import create_project
-from studio.services.run_service import create_run, update_run_status
 from studio.services.project_status_service import (
     calculate_project_status,
     update_project_status,
 )
+from studio.services.run_service import create_run, update_run_status
 
 
 def test_project_status_is_new_without_runs():

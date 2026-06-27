@@ -4,7 +4,7 @@
 <h2>Run #{{ run.id }}</h2>
 
 <p>Project ID: {{ run.project_id }}</p>
-<p>Status: <span class="status">{{ run.status }}</span></p>
+<p>Status: <span class="status status-{{ run.status }}">{{ run.status }}</span></p>
 <p>Stage: {{ run.current_stage }}</p>
 <p>Created: {{ run.created_at }}</p>
 <p>Updated: {{ run.updated_at }}</p>
@@ -31,7 +31,7 @@
         <td>{{ event.event_time }}</td>
         <td>{{ event.event_type }}</td>
         <td>{{ event.stage or '' }}</td>
-        <td>{{ event.message or '' }}</td>
+        <td class="event-message">{{ event.message or '' }}</td>
     </tr>
     {% endfor %}
 </table>

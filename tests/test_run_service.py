@@ -4,8 +4,8 @@ from studio.services.run_service import (
     create_run,
     create_run_if_not_active,
     get_active_run_for_project,
-    get_run,
     get_next_queued_run,
+    get_run,
     update_run_status,
 )
 

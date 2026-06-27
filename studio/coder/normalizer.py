@@ -4,16 +4,13 @@ ACTION_ALIASES = {
     "make_directory": "mkdir",
     "create_dir": "mkdir",
     "create_directory": "mkdir",
-
     "write_file": "write_file",
     "create_file": "write_file",
     "write": "write_file",
     "append_content": "write_file",
     "append_file": "write_file",
-
     "read_file": "read_file",
     "read": "read_file",
-
     "run": "run",
     "execute": "run",
     "shell": "run",
@@ -71,7 +68,6 @@ def normalize_command(action):
     return action
 
 
-
 def normalize_shorthand_action(action):
     if "action" in action or "type" in action or "operation" in action:
         return action
@@ -108,7 +104,6 @@ def normalize_shorthand_action(action):
     }
 
 
-
 def expand_batch_actions(actions):
     expanded = []
 
@@ -119,32 +114,37 @@ def expand_batch_actions(actions):
 
         if "mkdir" in action and isinstance(action["mkdir"], list):
             for path in action["mkdir"]:
-                expanded.append({
-                    "action": "mkdir",
-                    "path": path,
-                })
+                expanded.append(
+                    {
+                        "action": "mkdir",
+                        "path": path,
+                    }
+                )
             continue
 
         if "write_file" in action and isinstance(action["write_file"], list):
             for item in action["write_file"]:
-                expanded.append({
-                    "action": "write_file",
-                    **item,
-                })
+                expanded.append(
+                    {
+                        "action": "write_file",
+                        **item,
+                    }
+                )
             continue
 
         if "run" in action and isinstance(action["run"], list):
             for command in action["run"]:
-                expanded.append({
-                    "action": "run",
-                    "command": command,
-                })
+                expanded.append(
+                    {
+                        "action": "run",
+                        "command": command,
+                    }
+                )
             continue
 
         expanded.append(action)
 
     return expanded
-
 
 
 def normalize_write_file_content(action):
@@ -153,7 +153,6 @@ def normalize_write_file_content(action):
             action["content"] = action.pop("command")
 
     return action
-
 
 
 def expand_path_list_actions(actions):

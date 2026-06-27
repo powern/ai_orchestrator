@@ -1,4 +1,8 @@
-from studio.core.json_utils import strip_markdown_code_fence, normalize_coder_json, normalize_coder_json_result
+from studio.core.json_utils import (
+    normalize_coder_json,
+    normalize_coder_json_result,
+    strip_markdown_code_fence,
+)
 
 
 def test_strip_markdown_code_fence():

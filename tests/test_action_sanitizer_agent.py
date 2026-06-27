@@ -1,4 +1,5 @@
 from studio.sanitizer.agent import ActionSanitizerAgent
+from studio.sanitizer.result import SanitizerResult
 
 
 class FakeAdapter:
@@ -74,9 +75,6 @@ def test_action_sanitizer_agent_process_returns_pipeline_result():
             "path": "app",
         }
     ]
-
-
-from studio.sanitizer.result import SanitizerResult
 
 
 def test_action_sanitizer_process_returns_sanitizer_result():

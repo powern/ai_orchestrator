@@ -15,9 +15,7 @@ def test_reviewer_returns_result(tmp_path):
     )
 
     (tests_dir / "test_main.py").write_text(
-        "from app.main import main\n\n"
-        "def test_main():\n"
-        "    assert main() == 'ok'\n",
+        "from app.main import main\n\n" "def test_main():\n" "    assert main() == 'ok'\n",
         encoding="utf-8",
     )
 
@@ -55,8 +53,7 @@ def test_reviewer_finds_placeholder_text(tmp_path):
     )
 
     (tests_dir / "test_main.py").write_text(
-        "def test_main():\n"
-        "    pass\n",
+        "def test_main():\n" "    pass\n",
         encoding="utf-8",
     )
 

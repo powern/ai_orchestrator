@@ -56,7 +56,6 @@ def test_static_reviewer_rejects_placeholder_and_dangerous_command():
     assert any("Dangerous command" in finding for finding in result.findings)
 
 
-
 def test_static_reviewer_rejects_single_quote_placeholder():
     actions = [
         {

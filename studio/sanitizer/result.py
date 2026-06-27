@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+
 from studio.execution_model.program import ExecutorProgram
 
 
@@ -9,8 +10,6 @@ class SanitizerResult:
     attempts: int
     retried: bool
     validation_error: str | None = None
-
-
 
     @property
     def program(self):

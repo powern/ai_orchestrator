@@ -69,6 +69,20 @@ def list_events(run_id):
         ).fetchall()
 
 
+def list_latest_events(run_id, limit=20):
+    with get_connection() as conn:
+        return conn.execute(
+            """
+            SELECT *
+            FROM run_events
+            WHERE run_id=?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (run_id, limit),
+        ).fetchall()
+
+
 def row_to_run_event(row):
     return RunEvent(
         event_id=row["id"],

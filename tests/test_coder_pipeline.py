@@ -1,7 +1,7 @@
 import pytest
 
-from studio.coder.repair import repair
 from studio.coder.normalizer import normalize
+from studio.coder.repair import repair
 from studio.coder.validator import validate
 
 
@@ -21,7 +21,7 @@ print('hello')
     repaired = repair(raw)
 
     assert repaired.startswith("[")
-    assert '```' not in repaired
+    assert "```" not in repaired
     assert '"""' not in repaired
     assert "print('hello')" in repaired
 
@@ -148,18 +148,9 @@ def test_normalize_append_content_alias():
 
 def test_normalize_shorthand_actions():
     actions = [
-        {
-            "mkdir": "app"
-        },
-        {
-            "write_file": {
-                "path": "app/main.py",
-                "content": "print('hello')"
-            }
-        },
-        {
-            "run": "pytest tests"
-        }
+        {"mkdir": "app"},
+        {"write_file": {"path": "app/main.py", "content": "print('hello')"}},
+        {"run": "pytest tests"},
     ]
 
     normalized = normalize(actions)
@@ -183,24 +174,14 @@ def test_normalize_shorthand_actions():
 
 def test_normalize_batch_actions():
     actions = [
-        {
-            "mkdir": ["app", "tests"]
-        },
+        {"mkdir": ["app", "tests"]},
         {
             "write_file": [
-                {
-                    "path": "app/main.py",
-                    "content": "print('hello')"
-                },
-                {
-                    "path": "tests/test_main.py",
-                    "content": "def test_ok(): pass"
-                }
+                {"path": "app/main.py", "content": "print('hello')"},
+                {"path": "tests/test_main.py", "content": "def test_ok(): pass"},
             ]
         },
-        {
-            "run": ["pytest"]
-        }
+        {"run": ["pytest"]},
     ]
 
     normalized = normalize(actions)

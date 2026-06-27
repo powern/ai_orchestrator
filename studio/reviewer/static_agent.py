@@ -32,7 +32,7 @@ class StaticReviewerAgent(BaseAgent):
             if action_type == "write_file":
                 content = action.get("content", "")
 
-                if "Hello, World!" in content or "Hello, World!" in content.replace("\\'", "\'"):
+                if "Hello, World!" in content or "Hello, World!" in content.replace("\\'", "'"):
                     findings.append(f"Placeholder text found in {path}")
 
                 if "TODO" in content:
@@ -65,12 +65,8 @@ class StaticReviewerAgent(BaseAgent):
             "Placeholder text",
         )
 
-        approved = (
-            score >= 80
-            and not any(
-                any(pattern in finding for pattern in critical_patterns)
-                for finding in findings
-            )
+        approved = score >= 80 and not any(
+            any(pattern in finding for pattern in critical_patterns) for finding in findings
         )
 
         return ReviewerResult(

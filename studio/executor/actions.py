@@ -64,8 +64,7 @@ def action_run(workspace_path, command, timeout=120):
     normalized_command = command.strip()
 
     if not any(
-        normalized_command == prefix
-        or normalized_command.startswith(f"{prefix} ")
+        normalized_command == prefix or normalized_command.startswith(f"{prefix} ")
         for prefix in allowed_prefixes
     ):
         raise ExecutorError(f"Command is not allowed: {command}")
@@ -141,17 +140,21 @@ def execute_actions(workspace_path, actions):
         action_dict = action.to_dict()
         try:
             output = execute_action(workspace_path, action)
-            results.append({
-                "ok": True,
-                "action": action_dict,
-                "output": output,
-            })
+            results.append(
+                {
+                    "ok": True,
+                    "action": action_dict,
+                    "output": output,
+                }
+            )
         except Exception as exc:
-            results.append({
-                "ok": False,
-                "action": action_dict,
-                "error": str(exc),
-            })
+            results.append(
+                {
+                    "ok": False,
+                    "action": action_dict,
+                    "error": str(exc),
+                }
+            )
             break
 
     return results

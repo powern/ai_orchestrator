@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 STUDIO_DIR = BASE_DIR / "studio"
@@ -26,3 +25,23 @@ EXECUTOR_ISOLATION = True
 OLLAMA_GENERATE_TIMEOUT = 900
 OLLAMA_NUM_PREDICT = 1200
 OLLAMA_TEMPERATURE = 0.2
+
+SCHEDULER_POLL_INTERVAL_SECONDS = 5
+CODER_MAX_SANITIZE_ATTEMPTS = 2
+FIX_MAX_SANITIZE_ATTEMPTS = 2
+
+STAGE_PROGRESS = {
+    "queued": 0,
+    "planner": 10,
+    "architect": 20,
+    "coder": 35,
+    "static_reviewer": 50,
+    "executor": 65,
+    "tester": 80,
+    "reviewer": 90,
+    "tester_completed": 100,
+    "static_review_failed": 50,
+    "tester_failed": 80,
+    "pipeline_failed": 100,
+    "cancelled": 100,
+}

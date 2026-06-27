@@ -1,6 +1,6 @@
-from agents.planner import PlannerAgent
 from agents.architect import ArchitectAgent
 from agents.coder import CoderAgent
+from agents.planner import PlannerAgent
 from agents.tester import AgentTester
 
 

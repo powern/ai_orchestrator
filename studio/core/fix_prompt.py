@@ -32,10 +32,13 @@ Rules:
 - Do not modify AI Studio itself.
 
 Important Python fix hints:
-- If tests contain "from app import main" and then call main(), fix the test to use "from app.main import main".
-- If TypeError says "'module' object is not callable", it usually means the test imported a module instead of a function.
+- If tests contain "from app import main" and then call main(), fix the test to
+  use "from app.main import main".
+- If TypeError says "'module' object is not callable", it usually means the test
+  imported a module instead of a function.
 - If tests use unittest.TestCase, tests/test_main.py must contain "import unittest".
-- If NameError says "name 'unittest' is not defined", add "import unittest" at the top of tests/test_main.py.
+- If NameError says "name 'unittest' is not defined", add "import unittest" at
+  the top of tests/test_main.py.
 - Prefer fixing tests/test_main.py when the implementation in app/main.py is already correct.
 
 Return fix actions now.

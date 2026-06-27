@@ -8,9 +8,10 @@ from studio.config.settings import DATABASE_PATH
 def get_database_path():
     configured_path = os.environ.get("AI_STUDIO_DB_PATH")
 
-    if configured_path and os.name == "nt" and (
-        configured_path.startswith("/tmp/")
-        or configured_path.startswith("\\tmp\\")
+    if (
+        configured_path
+        and os.name == "nt"
+        and (configured_path.startswith("/tmp/") or configured_path.startswith("\\tmp\\"))
     ):
         return str(DATABASE_PATH.parent / ".tmp" / Path(configured_path).name)
 

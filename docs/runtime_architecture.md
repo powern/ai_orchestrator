@@ -94,3 +94,17 @@ python -m studio.scheduler.worker
 
 Generated workspaces, local DBs, caches, and virtual environments are ignored by
 Git.
+
+## Extension Points
+
+Future integrations should implement narrow backend interfaces from
+`studio.integrations.interfaces` instead of depending on stage internals.
+
+Prepared integration categories:
+
+- planning backends: OpenAI, Claude, Gemini, DeepSeek
+- coding backends: Aider, OpenHands, Claude Code
+- execution backends: local executor, Docker, Kubernetes
+- source-control backends: Git branches, pull requests
+- deployment backends: local, Docker, Kubernetes
+- external clients: REST API now, WebSocket/MCP later

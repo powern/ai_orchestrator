@@ -25,15 +25,10 @@ def migrate():
         )
         """)
 
-
-        columns = [
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(runs)").fetchall()
-        ]
+        columns = [row["name"] for row in conn.execute("PRAGMA table_info(runs)").fetchall()]
 
         if "bug_report" not in columns:
             conn.execute("ALTER TABLE runs ADD COLUMN bug_report TEXT")
-
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS project_runtime (

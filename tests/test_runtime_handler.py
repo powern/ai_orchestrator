@@ -1,10 +1,10 @@
 from studio.database.db import init_db
 from studio.database.migrations import migrate
+from studio.events.handlers import RuntimeHandler
+from studio.events.run_events import RunEvent
 from studio.services.project_service import create_project
 from studio.services.run_service import create_run
 from studio.services.runtime_service import get_project_runtime
-from studio.events.handlers import RuntimeHandler
-from studio.events.run_events import RunEvent
 
 
 def test_runtime_handler_updates_project_runtime():

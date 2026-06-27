@@ -20,8 +20,6 @@ def validate(actions):
         missing = REQUIRED[action_type] - set(action.keys())
 
         if missing:
-            raise ValueError(
-                f"{action_type} missing fields: {sorted(missing)}"
-            )
+            raise ValueError(f"{action_type} missing fields: {sorted(missing)}")
 
     return actions

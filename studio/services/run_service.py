@@ -1,7 +1,7 @@
+from studio.core.status import RunStatus, validate_run_status_transition
 from studio.database.db import get_connection
 
-
-ACTIVE_RUN_STATUSES = ("queued", "running")
+ACTIVE_RUN_STATUSES = (RunStatus.QUEUED.value, RunStatus.RUNNING.value)
 
 
 def create_run(project_id):
@@ -85,19 +85,29 @@ def get_run(run_id):
 
 def get_next_queued_run():
     with get_connection() as conn:
-        return conn.execute(
-            """
+        return conn.execute("""
             SELECT *
             FROM runs
             WHERE status = 'queued'
             ORDER BY id ASC
             LIMIT 1
-            """
-        ).fetchone()
+            """).fetchone()
 
 
 def update_run_status(run_id, status, current_stage=None, result=None):
+    next_status = RunStatus(status).value
+
     with get_connection() as conn:
+        current = conn.execute(
+            "SELECT status FROM runs WHERE id = ?",
+            (run_id,),
+        ).fetchone()
+
+        if current is None:
+            raise ValueError(f"Run does not exist: {run_id}")
+
+        validate_run_status_transition(current["status"], next_status)
+
         conn.execute(
             """
             UPDATE runs
@@ -107,7 +117,7 @@ def update_run_status(run_id, status, current_stage=None, result=None):
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
-            (status, current_stage, result, run_id),
+            (next_status, current_stage, result, run_id),
         )
         conn.commit()
 

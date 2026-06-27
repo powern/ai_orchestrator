@@ -1,5 +1,5 @@
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable
 
 
 @dataclass
@@ -44,11 +44,7 @@ class ExecutorAction:
             path=data.get("path"),
             content=data.get("content"),
             command=data.get("command"),
-            metadata={
-                key: value
-                for key, value in data.items()
-                if key not in known_fields
-            },
+            metadata={key: value for key, value in data.items() if key not in known_fields},
         )
 
 
@@ -67,10 +63,7 @@ class ExecutorProgram:
         return cls(actions=[ExecutorAction.from_dict(item) for item in actions])
 
     def to_dicts(self):
-        return [
-            action.to_dict()
-            for action in self.actions
-        ]
+        return [action.to_dict() for action in self.actions]
 
     def __iter__(self):
         return iter(self.actions)

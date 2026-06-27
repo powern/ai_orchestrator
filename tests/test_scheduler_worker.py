@@ -1,12 +1,11 @@
+from studio.core import stages
 from studio.database.db import init_db
 from studio.database.migrations import migrate
-from studio.services.project_service import create_project
-from studio.services.run_service import create_run, get_next_queued_run, get_run
-from studio.services.event_service import list_events
-from studio.services.project_service import get_project
-from studio.services.runtime_service import get_project_runtime
 from studio.scheduler import worker
-from studio.core import stages
+from studio.services.event_service import list_events
+from studio.services.project_service import create_project, get_project
+from studio.services.run_service import create_run, get_next_queued_run, get_run
+from studio.services.runtime_service import get_project_runtime
 
 
 class FakeLLMAdapter:
@@ -35,7 +34,8 @@ class FakeLLMAdapter:
               {
                 "action": "write_file",
                 "path": "tests/test_main.py",
-                "content": "from app.main import main\\n\\ndef test_main():\\n    assert main() == 'hello'\\n"
+                "content": "from app.main import main\\n\\ndef test_main():\\n"
+                           "    assert main() == 'hello'\\n"
               }
             ]
             """

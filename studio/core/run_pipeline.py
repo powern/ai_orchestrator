@@ -1,25 +1,24 @@
 import json
-from studio.database.db import get_connection
+
+from studio.config.settings import DEFAULT_MODELS, FIX_MAX_SANITIZE_ATTEMPTS
 from studio.core.json_utils import normalize_coder_json
+from studio.core.llm_adapter import LLMAdapter
 from studio.core.stages import (
     run_architect_stage,
     run_coder_placeholder,
     run_executor_stage,
-    run_tester_stage,
     run_fix_stage,
+    run_tester_stage,
 )
-
-from studio.services.run_service import (
-    update_run_status,
-)
-
+from studio.core.tester_result import StageTestResult
+from studio.database.db import get_connection
 from studio.events.publisher import publish_run_event
 from studio.reviewer.static_agent import StaticReviewerAgent
-from studio.core.tester_result import StageTestResult
-from studio.core.llm_adapter import LLMAdapter
-from studio.config.settings import DEFAULT_MODELS
 from studio.sanitizer.agent import ActionSanitizerAgent
-from studio.services.run_service import save_stage_output
+from studio.services.run_service import (
+    save_stage_output,
+    update_run_status,
+)
 
 
 def add_event(run_id, event_type, stage=None, message="", payload=None):
@@ -30,7 +29,6 @@ def add_event(run_id, event_type, stage=None, message="", payload=None):
         message=message,
         payload=payload,
     )
-
 
 
 def get_project_id(project):
@@ -53,7 +51,6 @@ def get_project_id_for_run(run_id):
     return row["project_id"]
 
 
-
 def sanitize_fix_output(run_id, fix_output):
     sanitizer = ActionSanitizerAgent(
         adapter=LLMAdapter(),
@@ -62,7 +59,7 @@ def sanitize_fix_output(run_id, fix_output):
 
     result = sanitizer.process(
         fix_output,
-        max_attempts=2,
+        max_attempts=FIX_MAX_SANITIZE_ATTEMPTS,
     )
 
     normalized_output = json.dumps(

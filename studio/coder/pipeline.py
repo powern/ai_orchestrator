@@ -1,10 +1,10 @@
 import ast
 import json
 
-from studio.coder.repair import repair
 from studio.coder.normalizer import normalize
-from studio.coder.validator import validate
+from studio.coder.repair import repair
 from studio.coder.result import PipelineResult
+from studio.coder.validator import validate
 
 
 class CoderPipeline:

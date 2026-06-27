@@ -7,4 +7,3 @@ class AgentTester(BaseAgent):
 
     def __init__(self, model=None):
         self.model = model or DEFAULT_MODELS["tester"]
-

@@ -1,23 +1,34 @@
-from flask import Flask, render_template, request, redirect, url_for, abort
+from flask import Flask, abort, jsonify, redirect, render_template, request, url_for
 
 from studio.config.settings import FLASK_HOST, FLASK_PORT
 from studio.database.db import init_db
 from studio.database.migrations import migrate
-from studio.services.project_service import create_project, list_projects, get_project
 from studio.events.publisher import publish_run_event
-from studio.services.run_service import create_run_if_not_active, list_runs_for_project, get_run
-from studio.services.event_service import list_events
-
+from studio.services.event_service import list_events, list_latest_events
+from studio.services.project_service import (
+    create_project,
+    get_dashboard_metrics,
+    get_project,
+    get_project_summary,
+    list_project_summaries,
+)
+from studio.services.run_service import create_run_if_not_active, get_run, list_runs_for_project
+from studio.services.runtime_service import get_project_runtime
 
 app = Flask(__name__)
 init_db()
 migrate()
 
 
+def row_to_dict(row):
+    return dict(row) if row is not None else None
+
+
 @app.route("/")
 def index():
-    projects = list_projects()
-    return render_template("index.html", projects=projects)
+    projects = list_project_summaries()
+    metrics = get_dashboard_metrics()
+    return render_template("index.html", projects=projects, metrics=metrics)
 
 
 @app.route("/projects/new", methods=["GET", "POST"])
@@ -47,7 +58,18 @@ def project_detail(project_id):
         abort(404)
 
     runs = list_runs_for_project(project_id)
-    return render_template("project_detail.html", project=project, runs=runs)
+    summary = get_project_summary(project_id)
+    runtime = get_project_runtime(project_id)
+    latest_events = list_latest_events(runs[0]["id"], limit=1) if runs else []
+    latest_event = latest_events[0] if latest_events else None
+    return render_template(
+        "project_detail.html",
+        project=project,
+        summary=summary,
+        runtime=runtime,
+        latest_event=latest_event,
+        runs=runs,
+    )
 
 
 @app.route("/projects/<int:project_id>/run", methods=["POST"])
@@ -87,6 +109,53 @@ def run_detail(run_id):
 
     events = list_events(run_id)
     return render_template("run_detail.html", run=run, events=events)
+
+
+@app.get("/api/projects")
+def api_projects():
+    return jsonify(
+        {
+            "projects": list_project_summaries(),
+            "metrics": get_dashboard_metrics(),
+        }
+    )
+
+
+@app.get("/api/projects/<int:project_id>")
+def api_project(project_id):
+    project = get_project_summary(project_id)
+    if project is None:
+        abort(404)
+
+    runs = [dict(row) for row in list_runs_for_project(project_id)]
+    runtime = row_to_dict(get_project_runtime(project_id))
+
+    return jsonify(
+        {
+            "project": project,
+            "runtime": runtime,
+            "runs": runs,
+        }
+    )
+
+
+@app.get("/api/runs/<int:run_id>")
+def api_run(run_id):
+    run = get_run(run_id)
+    if run is None:
+        abort(404)
+
+    return jsonify({"run": row_to_dict(run)})
+
+
+@app.get("/api/runtime")
+def api_runtime():
+    return jsonify({"metrics": get_dashboard_metrics()})
+
+
+@app.get("/api/events/<int:run_id>")
+def api_events(run_id):
+    return jsonify({"events": [dict(row) for row in list_events(run_id)]})
 
 
 if __name__ == "__main__":
