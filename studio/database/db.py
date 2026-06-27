@@ -1,15 +1,27 @@
 import os
 import sqlite3
+from pathlib import Path
 
 from studio.config.settings import DATABASE_PATH
 
 
 def get_database_path():
-    return os.environ.get("AI_STUDIO_DB_PATH", str(DATABASE_PATH))
+    configured_path = os.environ.get("AI_STUDIO_DB_PATH")
+
+    if configured_path and os.name == "nt" and (
+        configured_path.startswith("/tmp/")
+        or configured_path.startswith("\\tmp\\")
+    ):
+        return str(DATABASE_PATH.parent / ".tmp" / Path(configured_path).name)
+
+    return configured_path or str(DATABASE_PATH)
 
 
 def get_connection():
-    conn = sqlite3.connect(get_database_path())
+    database_path = Path(get_database_path())
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(database_path)
     conn.row_factory = sqlite3.Row
     return conn
 

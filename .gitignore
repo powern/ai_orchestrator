@@ -1,0 +1,8 @@
+.venv/
+.tmp/
+__pycache__/
+*.py[cod]
+studio.db
+studio/logs/
+studio/projects/
+studio/workspaces/

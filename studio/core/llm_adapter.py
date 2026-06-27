@@ -1,5 +1,4 @@
 import json
-from typing import Optional
 
 from core.ollama_client import OllamaClient
 from studio.coder.retry import RetryPromptBuilder
