@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Run #{{ run.id }}</h2>
+
+<p>Project ID: {{ run.project_id }}</p>
+<p>Status: <span class="status">{{ run.status }}</span></p>
+<p>Stage: {{ run.current_stage }}</p>
+<p>Created: {{ run.created_at }}</p>
+<p>Updated: {{ run.updated_at }}</p>
+
+
+<h3>Planner Output</h3>
+<pre>{{ run.planner_output or 'No planner output yet.' }}</pre>
+
+<h3>Events</h3>
+
+
+{% if events %}
+<table>
+    <tr>
+        <th>ID</th>
+        <th>Time</th>
+        <th>Type</th>
+        <th>Stage</th>
+        <th>Message</th>
+    </tr>
+    {% for event in events %}
+    <tr>
+        <td>{{ event.id }}</td>
+        <td>{{ event.event_time }}</td>
+        <td>{{ event.event_type }}</td>
+        <td>{{ event.stage or '' }}</td>
+        <td>{{ event.message or '' }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p>No events yet.</p>
+{% endif %}
+
+<p><a class="btn btn-secondary" href="/projects/{{ run.project_id }}">Back to Project</a></p>
+{% endblock %}

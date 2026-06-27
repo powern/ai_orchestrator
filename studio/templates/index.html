@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Projects</h2>
+
+{% if projects %}
+<table>
+    <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Status</th>
+        <th>Workspace</th>
+        <th>Created</th>
+    </tr>
+    {% for project in projects %}
+    <tr>
+        <td>{{ project.id }}</td>
+        <td><a href="/projects/{{ project.id }}">{{ project.name }}</a></td>
+        <td><span class="status">{{ project.status }}</span></td>
+        <td class="muted">{{ project.workspace_path }}</td>
+        <td>{{ project.created_at }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p>No projects yet.</p>
+{% endif %}
+{% endblock %}

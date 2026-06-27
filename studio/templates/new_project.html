@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>New Project</h2>
+
+{% if error %}
+<div class="error">{{ error }}</div>
+{% endif %}
+
+<form method="post">
+    <label>Project name</label>
+    <input name="name" value="{{ name or '' }}" placeholder="Наприклад: IP Ban Manager">
+
+    <label>Project description / requirements</label>
+    <textarea name="description" placeholder="Опиши, що саме має розробити оркестратор...">{{ description or '' }}</textarea>
+
+    <button class="btn" type="submit">Create Project</button>
+</form>
+{% endblock %}

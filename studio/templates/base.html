@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8">
+    <title>AI Development Studio</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background: #f5f6f8; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 24px; border-radius: 12px; }
+        .nav { display: flex; gap: 12px; margin-bottom: 24px; }
+        .btn { display: inline-block; padding: 10px 14px; background: #0d6efd; color: white; text-decoration: none; border-radius: 6px; border: 0; cursor: pointer; }
+        .btn-green { background: #198754; }
+        .btn-secondary { background: #6c757d; }
+        .status { padding: 4px 8px; border-radius: 6px; background: #eee; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; vertical-align: top; }
+        input, textarea { width: 100%; padding: 10px; margin: 6px 0 14px 0; box-sizing: border-box; }
+        textarea { height: 260px; }
+        .error { color: #b00020; margin-bottom: 12px; }
+        pre { white-space: pre-wrap; background: #111; color: #eee; padding: 14px; border-radius: 8px; }
+        .muted { color: #666; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>AI Development Studio</h1>
+    <div class="nav">
+        <a class="btn" href="/">Projects</a>
+        <a class="btn" href="/projects/new">New Project</a>
+    </div>
+    {% block content %}{% endblock %}
+</div>
+</body>
+</html>

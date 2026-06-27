@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Project #{{ project.id }} — {{ project.name }}</h2>
+
+<p>Status: <span class="status">{{ project.status }}</span></p>
+<p>Workspace: <span class="muted">{{ project.workspace_path }}</span></p>
+
+<h3>Description</h3>
+<pre>{{ project.description }}</pre>
+
+<form method="post" action="/projects/{{ project.id }}/run">
+    <button class="btn btn-green" type="submit">Run Orchestrator</button>
+</form>
+
+<h3>Runs</h3>
+
+{% if runs %}
+<table>
+    <tr>
+        <th>ID</th>
+        <th>Status</th>
+        <th>Stage</th>
+        <th>Created</th>
+        <th>Updated</th>
+    </tr>
+    {% for run in runs %}
+    <tr>
+        <td><a href="/runs/{{ run.id }}">{{ run.id }}</a></td>
+        <td><span class="status">{{ run.status }}</span></td>
+        <td>{{ run.current_stage }}</td>
+        <td>{{ run.created_at }}</td>
+        <td>{{ run.updated_at }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p>No runs yet.</p>
+{% endif %}
+
+<p><a class="btn btn-secondary" href="/">Back</a></p>
+{% endblock %}
