@@ -35,6 +35,9 @@ def migrate():
         if "coder_sanitizer_error" not in columns:
             conn.execute("ALTER TABLE runs ADD COLUMN coder_sanitizer_error TEXT")
 
+        if "executor_output" not in columns:
+            conn.execute("ALTER TABLE runs ADD COLUMN executor_output TEXT")
+
         if "fix_raw_output" not in columns:
             conn.execute("ALTER TABLE runs ADD COLUMN fix_raw_output TEXT")
 

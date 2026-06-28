@@ -242,6 +242,7 @@ def run_executor_stage(run_id, workspace_path, coder_output):
     results = execute_actions(workspace_path, actions)
     result_text = str(results)
 
+    save_stage_output(run_id, "executor_output", result_text)
     save_stage_output(run_id, "result", result_text)
 
     add_event(
@@ -284,12 +285,17 @@ def run_tester_stage(run_id, workspace_path):
             save_stage_output(run_id, "bug_report", bug_report)
 
             coder_output = get_stage_output(run_id, "coder_output") or ""
+            executor_output = get_stage_output(run_id, "executor_output") or ""
+            context_builder = FixWorkspaceContextBuilder()
 
             fix_prompt = FixPromptBuilder().build(
                 original_coder_output=coder_output,
                 tester_result=tester_result,
                 task_description=get_task_description_for_run(run_id),
-                workspace_files=FixWorkspaceContextBuilder().build(workspace_path, tester_result),
+                workspace_files=context_builder.build(workspace_path, tester_result),
+                workspace_tree=context_builder.build_tree(workspace_path),
+                bug_report=bug_report,
+                executor_output=executor_output,
             )
 
             save_stage_output(run_id, "result", fix_prompt)
@@ -336,13 +342,19 @@ def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
 
     adapter = LLMAdapter()
     task_description = get_task_description_for_run(run_id)
-    workspace_files = FixWorkspaceContextBuilder().build(workspace_path, tester_result)
+    bug_report = get_stage_output(run_id, "bug_report") or ""
+    executor_output = get_stage_output(run_id, "executor_output") or ""
+    context_builder = FixWorkspaceContextBuilder()
+    workspace_files = context_builder.build(workspace_path, tester_result)
 
     fix_prompt = FixPromptBuilder().build(
         original_coder_output=coder_output,
         tester_result=tester_result,
         task_description=task_description,
         workspace_files=workspace_files,
+        workspace_tree=context_builder.build_tree(workspace_path),
+        bug_report=bug_report,
+        executor_output=executor_output,
     )
 
     fix_output = adapter.ask(
