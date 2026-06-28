@@ -31,7 +31,12 @@ class FakeLLMAdapter:
                     {
                         "action": "write_file",
                         "path": "app/main.py",
-                        "content": "def main():\n    return 'hello'\n",
+                        "content": (
+                            "def main():\n"
+                            "    return 'hello'\n\n\n"
+                            "if __name__ == \"__main__\":\n"
+                            "    print(main())\n"
+                        ),
                     },
                     {
                         "action": "write_file",
@@ -40,6 +45,18 @@ class FakeLLMAdapter:
                             "from app.main import main\n\n"
                             "def test_main():\n"
                             "    assert main() == 'hello'\n"
+                        ),
+                    },
+                    {
+                        "action": "write_file",
+                        "path": "RUN.md",
+                        "content": (
+                            "Install:\n"
+                            "No external dependencies.\n\n"
+                            "Run:\n"
+                            "python app/main.py\n\n"
+                            "Test:\n"
+                            "pytest -q\n"
                         ),
                     },
                 ]

@@ -45,6 +45,8 @@ STAGE_PROGRESS = {
     "reviewer": 90,
     "tester_completed": 100,
     "static_review_failed": 50,
+    "runtime_readiness": 95,
+    "runtime_readiness_failed": 95,
     "tester_failed": 80,
     "pipeline_failed": 100,
     "cancelled": 100,

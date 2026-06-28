@@ -59,6 +59,9 @@ def migrate():
         if "tester_output_after_fix" not in columns:
             conn.execute("ALTER TABLE runs ADD COLUMN tester_output_after_fix TEXT")
 
+        if "runtime_readiness" not in columns:
+            conn.execute("ALTER TABLE runs ADD COLUMN runtime_readiness TEXT")
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS project_runtime (
                 project_id INTEGER PRIMARY KEY,

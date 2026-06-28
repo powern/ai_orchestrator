@@ -3,7 +3,7 @@ from studio.database.db import init_db
 from studio.database.migrations import migrate
 from studio.events.publisher import publish_run_event
 from studio.services.project_service import create_project
-from studio.services.run_service import create_run
+from studio.services.run_service import create_run, save_stage_output
 
 
 def test_api_projects_returns_dashboard_metrics():
@@ -26,6 +26,7 @@ def test_api_project_run_events_and_runtime():
 
     project_id = create_project("API Detail Project", "Test")
     run_id = create_run(project_id)
+    save_stage_output(run_id, "runtime_readiness", '{"manual_run_ready": true}')
     publish_run_event(run_id, project_id, "run_completed", "tester_completed", "Done")
 
     client = app.test_client()
@@ -42,6 +43,7 @@ def test_api_project_run_events_and_runtime():
     assert run_response.get_json()["runtime"]["status"] == "completed"
     assert run_response.get_json()["events"][0]["event_type"] == "run_completed"
     assert run_response.get_json()["stage_outputs"]["result"] is None
+    assert run_response.get_json()["stage_outputs"]["runtime_readiness"]
     assert events_response.get_json()["events"][0]["event_type"] == "run_completed"
     assert runtime_response.get_json()["metrics"]["total_runs"] >= 1
     assert runtime_response.get_json()["projects"]

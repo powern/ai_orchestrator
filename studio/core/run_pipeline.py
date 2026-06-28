@@ -9,6 +9,7 @@ from studio.config.settings import (
 from studio.core.executor_schema import validate_executor_actions
 from studio.core.json_utils import normalize_coder_json
 from studio.core.llm_adapter import LLMAdapter
+from studio.core.runtime_readiness import RuntimeReadinessValidator
 from studio.core.stages import (
     run_architect_stage,
     run_coder_placeholder,
@@ -197,6 +198,50 @@ def _run_fix_stage_with_context(run_id, workspace_path, coder_output, tester_res
     )
 
 
+def run_runtime_readiness_stage(run_id, workspace_path):
+    add_event(
+        run_id,
+        "runtime_readiness_started",
+        "runtime_readiness",
+        "Runtime readiness validation started.",
+    )
+    report = RuntimeReadinessValidator().validate(workspace_path)
+    report_json = report.to_json()
+    save_stage_output(run_id, "runtime_readiness", report_json)
+
+    if report.manual_run_ready:
+        add_event(
+            run_id,
+            "runtime_readiness_completed",
+            "runtime_readiness",
+            "Runtime readiness validation passed.",
+            report_json,
+        )
+        return True, report
+
+    update_run_status(
+        run_id,
+        "failed",
+        "runtime_readiness_failed",
+        "Run failed because runtime readiness validation failed.",
+    )
+    add_event(
+        run_id,
+        "runtime_readiness_failed",
+        "runtime_readiness",
+        "Runtime readiness validation failed.",
+        report_json,
+    )
+    add_event(
+        run_id,
+        "run_failed",
+        "runtime_readiness_failed",
+        "Run failed because generated project is not manually runnable.",
+        report_json,
+    )
+    return False, report
+
+
 class RunPipeline:
     def __init__(self, planner_fn):
         self.planner_fn = planner_fn
@@ -352,6 +397,10 @@ class RunPipeline:
         )
 
         if tester_result.success:
+            readiness_ok, _ = run_runtime_readiness_stage(run_id, project["workspace_path"])
+            if not readiness_ok:
+                return
+
             update_run_status(
                 run_id,
                 "completed",
@@ -432,6 +481,10 @@ class RunPipeline:
         )
 
         if tester_result.success:
+            readiness_ok, _ = run_runtime_readiness_stage(run_id, project["workspace_path"])
+            if not readiness_ok:
+                return
+
             update_run_status(
                 run_id,
                 "completed",

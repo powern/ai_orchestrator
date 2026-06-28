@@ -88,10 +88,24 @@ def test_pipeline_runs_fix_when_static_review_fails(monkeypatch, tmp_path):
 
     monkeypatch.setattr(run_pipeline, "run_architect_stage", fake_architect)
     monkeypatch.setattr(run_pipeline, "run_coder_placeholder", fake_coder)
-    monkeypatch.setattr(run_pipeline, "run_fix_stage", fake_fix)
+    monkeypatch.setattr(
+        run_pipeline,
+        "_run_fix_stage_with_context",
+        lambda run_id, workspace_path, coder_output, tester_result, context: fake_fix(
+            run_id,
+            workspace_path,
+            coder_output,
+            tester_result,
+        ),
+    )
     monkeypatch.setattr(run_pipeline, "sanitize_fix_output", fake_sanitize_fix_output)
     monkeypatch.setattr(run_pipeline, "run_executor_stage", fake_executor)
     monkeypatch.setattr(run_pipeline, "run_tester_stage", fake_tester)
+    monkeypatch.setattr(
+        run_pipeline,
+        "run_runtime_readiness_stage",
+        lambda *args, **kwargs: (True, None),
+    )
     monkeypatch.setattr(run_pipeline, "update_run_status", lambda *args, **kwargs: None)
     monkeypatch.setattr(run_pipeline, "add_event", lambda *args, **kwargs: None)
 

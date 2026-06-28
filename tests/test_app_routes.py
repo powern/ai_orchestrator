@@ -102,6 +102,7 @@ def test_run_detail_template_exposes_navigation_and_stage_outputs():
     save_stage_output(run_id, "fix_raw_output", "raw fix")
     save_stage_output(run_id, "fix_sanitizer_error", "fix error")
     save_stage_output(run_id, "tester_output_after_fix", "tester after")
+    save_stage_output(run_id, "runtime_readiness", '{"manual_run_ready": true}')
     save_stage_output(run_id, "result", "x" * 5000)
     publish_run_event(
         run_id,
@@ -132,6 +133,8 @@ def test_run_detail_template_exposes_navigation_and_stage_outputs():
     assert "Repair Plan" in html
     assert "Fix Raw Output" in html
     assert "Fix Sanitizer Error" in html
+    assert "Runtime Readiness" in html
+    assert "manual_run_ready" in html
     assert "Final Result" in html
     assert "tester after" in html
     assert "<pre>" in html

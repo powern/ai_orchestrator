@@ -166,6 +166,7 @@ def save_stage_output(run_id, field_name, output):
         "tester_output",
         "tester_output_before_fix",
         "tester_output_after_fix",
+        "runtime_readiness",
         "bug_report",
         "result",
     }
@@ -202,6 +203,7 @@ def get_stage_output(run_id, field_name):
         "tester_output",
         "tester_output_before_fix",
         "tester_output_after_fix",
+        "runtime_readiness",
         "bug_report",
         "result",
     }
