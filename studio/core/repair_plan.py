@@ -46,7 +46,18 @@ class RepairPlanner:
             elif path not in repair_targets and not self._looks_missing_module_placeholder(path):
                 repair_targets.append(path)
 
-        primary_target = self._primary_target(root_cause, repair_targets, secondary_targets)
+        primary_target = analysis.primary_target or self._primary_target(
+            root_cause,
+            repair_targets,
+            secondary_targets,
+        )
+
+        if (
+            primary_target
+            and primary_target not in repair_targets
+            and primary_target.startswith("app/")
+        ):
+            repair_targets.insert(0, primary_target)
 
         return RepairPlan(
             root_cause=root_cause,

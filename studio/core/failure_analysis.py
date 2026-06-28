@@ -10,14 +10,21 @@ FILE_PATTERN = re.compile(r'File "([^"]+\.py)"')
 SHORT_FILE_PATTERN = re.compile(r"((?:app|tests)[/\\][\w./\\-]+\.py)")
 EXCEPTION_PATTERN = re.compile(r"(?m)^([A-Za-z_][\w.]*Error|SyntaxError|ImportError):\s*(.*)$")
 MISSING_MODULE_PATTERN = re.compile(r"No module named ['\"]([^'\"]+)['\"]")
+IMPORT_NAME_PATTERN = re.compile(r"cannot import name ['\"]([^'\"]+)['\"] from ['\"]([^'\"]+)['\"]")
+ATTRIBUTE_MODULE_PATTERN = re.compile(
+    r"module ['\"]([^'\"]+)['\"] has no attribute ['\"]([^'\"]+)['\"]"
+)
 
 
 @dataclass(frozen=True)
 class FailureAnalysis:
     exception_type: str
     message: str
+    failure_class: str
     root_cause: str | None
+    primary_target: str | None
     reason: str
+    confidence: float
     affected_files: list[str] = field(default_factory=list)
     import_chain: list[str] = field(default_factory=list)
     missing_module: str | None = None
@@ -28,8 +35,11 @@ class FailureAnalysis:
         return {
             "exception_type": self.exception_type,
             "message": self.message,
+            "failure_class": self.failure_class,
             "root_cause": self.root_cause,
+            "primary_target": self.primary_target,
             "reason": self.reason,
+            "confidence": self.confidence,
             "affected_files": self.affected_files,
             "import_chain": self.import_chain,
             "missing_module": self.missing_module,
@@ -48,27 +58,45 @@ class FailureAnalyzer:
         workspace = Path(workspace_path)
         output = f"{tester_result.stdout}\n{tester_result.stderr}\n{bug_report}"
         exception_type, message = self._exception(output)
+        failure_class = self._failure_class(exception_type, message)
         missing_module = self._missing_module(output)
+        import_error_module = self._import_error_module(message)
+        attribute_module = self._attribute_error_module(message)
         traceback_files = self._traceback_files(workspace, output)
         dependency_graph = self._dependency_graph(workspace)
 
         root_cause = self._root_cause(
             workspace=workspace,
             exception_type=exception_type,
+            message=message,
             traceback_files=traceback_files,
             missing_module=missing_module,
+            import_error_module=import_error_module,
+            attribute_module=attribute_module,
             dependency_graph=dependency_graph,
         )
+        primary_target = self._primary_target(root_cause, traceback_files)
         affected_files = self._affected_files(root_cause, traceback_files, missing_module)
-        reason = self._reason(exception_type, missing_module, root_cause, workspace)
+        import_chain = self._import_chain(workspace, traceback_files, dependency_graph)
+        reason = self._reason(
+            exception_type,
+            failure_class,
+            missing_module,
+            root_cause,
+            workspace,
+        )
+        confidence = self._confidence(exception_type, root_cause)
 
         return FailureAnalysis(
             exception_type=exception_type,
             message=message,
+            failure_class=failure_class,
             root_cause=root_cause,
+            primary_target=primary_target,
             reason=reason,
+            confidence=confidence,
             affected_files=affected_files,
-            import_chain=traceback_files,
+            import_chain=import_chain,
             missing_module=missing_module,
             workspace_tree=FixWorkspaceContextBuilder().build_tree(workspace),
             dependency_graph=dependency_graph,
@@ -85,6 +113,44 @@ class FailureAnalyzer:
     def _missing_module(self, output: str) -> str | None:
         match = MISSING_MODULE_PATTERN.search(output)
         return match.group(1) if match else None
+
+    def _import_error_module(self, message: str) -> str | None:
+        match = IMPORT_NAME_PATTERN.search(message)
+        return match.group(2) if match else None
+
+    def _attribute_error_module(self, message: str) -> str | None:
+        match = ATTRIBUTE_MODULE_PATTERN.search(message)
+        return match.group(1) if match else None
+
+    def _failure_class(self, exception_type: str, message: str) -> str:
+        if exception_type == "ModuleNotFoundError":
+            return "MissingModule"
+
+        if exception_type == "ImportError":
+            if IMPORT_NAME_PATTERN.search(message):
+                return "MissingExport"
+            return "ImportFailure"
+
+        if exception_type == "AttributeError":
+            if ATTRIBUTE_MODULE_PATTERN.search(message):
+                return "WrongObjectOrMissingAttribute"
+            return "MissingAttribute"
+
+        if exception_type == "TypeError":
+            if "module" in message and "callable" in message:
+                return "WrongObjectImported"
+            return "TypeMismatch"
+
+        if exception_type == "AssertionError":
+            return "BehaviorMismatch"
+
+        if exception_type == "SyntaxError":
+            return "SyntaxError"
+
+        if exception_type == "FileNotFoundError":
+            return "MissingFile"
+
+        return "UnknownFailure"
 
     def _traceback_files(self, workspace: Path, output: str) -> list[str]:
         files: list[str] = []
@@ -143,8 +209,11 @@ class FailureAnalyzer:
         self,
         workspace: Path,
         exception_type: str,
+        message: str,
         traceback_files: list[str],
         missing_module: str | None,
+        import_error_module: str | None,
+        attribute_module: str | None,
         dependency_graph: dict[str, list[str]],
     ) -> str | None:
         if exception_type == "SyntaxError":
@@ -152,6 +221,16 @@ class FailureAnalyzer:
             if source_files:
                 return source_files[-1]
             return traceback_files[-1] if traceback_files else None
+
+        if exception_type == "AttributeError":
+            attribute_target = self._module_to_existing_path(workspace, attribute_module)
+            if attribute_target:
+                return attribute_target
+
+        if exception_type == "ImportError":
+            import_target = self._module_to_existing_path(workspace, import_error_module)
+            if import_target:
+                return import_target
 
         importer = self._importer_for_missing_module(missing_module, dependency_graph)
         if importer:
@@ -171,7 +250,65 @@ class FailureAnalyzer:
             if (workspace / candidate).exists():
                 return candidate
 
+        if exception_type == "AssertionError":
+            assertion_target = self._production_import_from_tests(
+                workspace,
+                traceback_files,
+                dependency_graph,
+            )
+            if assertion_target:
+                return assertion_target
+
+        if exception_type == "TypeError" and "module" in message and "callable" in message:
+            callable_target = self._production_import_from_tests(
+                workspace,
+                traceback_files,
+                dependency_graph,
+            )
+            if callable_target:
+                return callable_target
+
         return traceback_files[-1] if traceback_files else None
+
+    def _module_to_existing_path(self, workspace: Path, module: str | None) -> str | None:
+        if not module:
+            return None
+
+        module_path = Path(*module.split("."))
+        candidates = [
+            workspace / module_path.with_suffix(".py"),
+            workspace / module_path / "__init__.py",
+        ]
+
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate.relative_to(workspace).as_posix()
+
+        return None
+
+    def _production_import_from_tests(
+        self,
+        workspace: Path,
+        traceback_files: list[str],
+        dependency_graph: dict[str, list[str]],
+    ) -> str | None:
+        for file_path in traceback_files:
+            if not file_path.startswith("tests/"):
+                continue
+
+            for import_name in dependency_graph.get(file_path, []):
+                if not import_name.startswith("app"):
+                    continue
+
+                target = self._module_to_existing_path(workspace, import_name)
+                if target and target.startswith("app/") and not target.endswith("__init__.py"):
+                    return target
+
+                package_member = workspace / Path(*import_name.split(".")) / "app.py"
+                if package_member.exists():
+                    return package_member.relative_to(workspace).as_posix()
+
+        return None
 
     def _package_root_candidate(self, workspace: Path, missing_module: str | None) -> str | None:
         if not missing_module:
@@ -211,6 +348,16 @@ class FailureAnalyzer:
 
         return None
 
+    def _primary_target(self, root_cause: str | None, traceback_files: list[str]) -> str | None:
+        if root_cause and root_cause.startswith("app/"):
+            return root_cause
+
+        source_files = [path for path in traceback_files if path.startswith("app/")]
+        if source_files:
+            return source_files[-1]
+
+        return root_cause
+
     def _affected_files(
         self,
         root_cause: str | None,
@@ -229,13 +376,46 @@ class FailureAnalyzer:
 
         return affected
 
+    def _import_chain(
+        self,
+        workspace: Path,
+        traceback_files: list[str],
+        dependency_graph: dict[str, list[str]],
+    ) -> list[str]:
+        chain = list(traceback_files)
+
+        for file_path in traceback_files:
+            if not file_path.startswith("tests/"):
+                continue
+            for import_name in dependency_graph.get(file_path, []):
+                if import_name.startswith("app") and import_name not in chain:
+                    chain.append(import_name)
+                target = self._module_to_existing_path(workspace, import_name)
+                if target and target not in chain:
+                    chain.append(target)
+
+        return chain
+
     def _reason(
         self,
         exception_type: str,
+        failure_class: str,
         missing_module: str | None,
         root_cause: str | None,
         workspace: Path,
     ) -> str:
+        if failure_class == "WrongObjectOrMissingAttribute":
+            return (
+                "Flask app object is not exported/imported correctly; test receives "
+                "a module-like object without the expected attribute."
+            )
+
+        if failure_class == "MissingExport":
+            return "Production module does not export the symbol imported by the tests."
+
+        if failure_class == "BehaviorMismatch" and root_cause and root_cause.startswith("app/"):
+            return "Production behavior does not satisfy the generated test assertion."
+
         if exception_type == "SyntaxError":
             return "Syntax error in imported source file."
 
@@ -252,3 +432,17 @@ class FailureAnalyzer:
             return "Import failure in generated project package hierarchy."
 
         return "Test failure requires repair planning."
+
+    def _confidence(self, exception_type: str, root_cause: str | None) -> float:
+        if root_cause and root_cause.startswith("app/"):
+            if exception_type in {"AttributeError", "ImportError", "ModuleNotFoundError"}:
+                return 0.85
+            if exception_type == "SyntaxError":
+                return 0.95
+            if exception_type == "AssertionError":
+                return 0.7
+
+        if root_cause:
+            return 0.55
+
+        return 0.2
