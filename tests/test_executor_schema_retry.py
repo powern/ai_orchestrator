@@ -85,6 +85,35 @@ class AlwaysInvalidSchemaSanitizer:
         )
 
 
+class UnsupportedActionThenValidSanitizer:
+    calls = 0
+
+    def __init__(self, adapter, model):
+        pass
+
+    def process(self, coder_output, max_attempts=2):
+        type(self).calls += 1
+        if type(self).calls == 1:
+            return SimpleNamespace(
+                actions=[
+                    {
+                        "action": "install_packages",
+                        "packages": ["flask"],
+                    }
+                ],
+                attempts=1,
+                retried=False,
+                program=SimpleNamespace(to_dicts=lambda: []),
+            )
+
+        return SimpleNamespace(
+            actions=VALID_ACTIONS,
+            attempts=2,
+            retried=True,
+            program=SimpleNamespace(to_dicts=lambda: VALID_ACTIONS),
+        )
+
+
 def create_schema_retry_run():
     init_db()
     migrate()
@@ -126,6 +155,30 @@ def test_coder_retries_after_executor_schema_validation_failure(monkeypatch):
     assert "pipeline_failed" not in event_types
     assert "mkdir.path expected str, got dict" in adapter.prompts[-1]
     assert "Invalid sanitized actions:" in adapter.prompts[-1]
+
+
+def test_coder_retry_rejects_unsupported_executor_action(monkeypatch):
+    adapter = RecordingAdapter()
+    UnsupportedActionThenValidSanitizer.calls = 0
+    monkeypatch.setattr(stages, "LLMAdapter", lambda: adapter)
+    monkeypatch.setattr(stages, "ActionSanitizerAgent", UnsupportedActionThenValidSanitizer)
+
+    init_db()
+    migrate()
+    project_id = create_project("Coder Unsupported Action Retry Project", "Test")
+    run_id = create_run(project_id)
+
+    output = run_coder_placeholder(run_id, "plan", "architecture")
+
+    event_types = [event["event_type"] for event in list_events(run_id)]
+    retry_prompt = adapter.prompts[-1]
+
+    assert output is not None
+    assert "coder_retry" in event_types
+    assert "Unknown executor action: install_packages" in retry_prompt
+    assert "Supported actions are ONLY: mkdir, write_file, read_file, run" in retry_prompt
+    assert "Replace unsupported actions such as install_packages" in retry_prompt
+    assert "Do not invent new action types" in retry_prompt
 
 
 def test_coder_fails_after_all_executor_schema_retries(monkeypatch):

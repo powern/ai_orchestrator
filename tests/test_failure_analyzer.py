@@ -46,6 +46,7 @@ def test_analyzer_identifies_main_as_root_cause_for_bad_package_import(tmp_path)
 
     assert analysis.root_cause == "app/main.py"
     assert analysis.reason == "Invalid package import for missing module 'application'."
+    assert plan.primary_target == "app/main.py"
     assert "app/main.py" in plan.repair_targets
     assert "tests/test_calculator.py" in plan.secondary_targets
 
@@ -127,4 +128,5 @@ def test_analyzer_identifies_missing_dependency_file(tmp_path):
     assert analysis.root_cause == "app/main.py"
     assert "app/missing_service.py" in analysis.affected_files
     assert "Missing dependency file" in analysis.reason
+    assert plan.primary_target == "app/main.py"
     assert "app/main.py" in plan.repair_targets

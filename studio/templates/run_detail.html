@@ -80,7 +80,7 @@
         <th>Type</th>
         <th>Stage</th>
         <th>Message</th>
-        <th>Payload</th>
+        <th>Details</th>
     </tr>
     {% for event in events %}
     <tr>
@@ -89,7 +89,16 @@
         <td>{{ event.event_type }}</td>
         <td>{{ event.stage or '' }}</td>
         <td class="event-message">{{ event.message or '' }}</td>
-        <td><pre>{{ event.payload or '' }}</pre></td>
+        <td>
+            {% if event.payload %}
+                <details class="event-payload">
+                    <summary>View Payload</summary>
+                    <pre>{{ event.payload }}</pre>
+                </details>
+            {% else %}
+                <span class="muted">none</span>
+            {% endif %}
+        </td>
     </tr>
     {% endfor %}
 </table>

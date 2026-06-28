@@ -186,6 +186,16 @@ Current bug report:
 Repair plan:
 {repair_context}
 
+Repair strategy:
+- Prioritize the repair plan primary_target.
+- Repair production code before tests by default.
+- If primary_target is an app/ file, include a write_file action for that file unless
+  the repair plan clearly says the tests are wrong.
+- Treat tests/ files as secondary targets.
+- Modify tests only when the test assertion/import is wrong, requirements changed, or
+  production-code repair cannot satisfy the original task.
+- Keep production files and tests consistent; do not hide source bugs by weakening tests.
+
 Test return code:
 {tester_result.returncode}
 
@@ -202,8 +212,9 @@ Rules:
 - Return a JSON array.
 - Use only supported actions: mkdir, write_file, read_file, run.
 - Prefer write_file actions to replace broken files.
-- You may fix implementation files, generated tests, or both.
-- If implementation is correct and a generated test assertion is wrong, fix the test.
+- Implement the repair plan primary target before secondary targets.
+- If implementation is correct and a generated test assertion is wrong, fix the test,
+  but explain this choice only through the selected Executor actions.
 - Do not invent package roots or import paths.
 - Base imports on the actual workspace tree and current file locations.
 - Prefer repairing source files and tests consistently over overwriting tests blindly.

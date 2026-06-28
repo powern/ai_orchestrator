@@ -126,7 +126,35 @@ def test_fix_prompt_includes_relevant_workspace_files(tmp_path):
     assert "def divide(a, b):" in prompt
     assert "Bug report body" in prompt
     assert "Executor wrote project files" in prompt
-    assert "You may fix implementation files, generated tests, or both." in prompt
+    assert "Repair production code before tests by default." in prompt
+    assert "Treat tests/ files as secondary targets." in prompt
+
+
+def test_fix_prompt_prioritizes_repair_plan_primary_target():
+    tester_result = StageTestResult(
+        success=False,
+        returncode=1,
+        stdout="FAILED tests/test_analyzer.py",
+        stderr="AssertionError",
+    )
+
+    prompt = FixPromptBuilder().build(
+        original_coder_output="[]",
+        tester_result=tester_result,
+        repair_plan=(
+            '{\n'
+            '  "root_cause": "app/application/analyzer.py",\n'
+            '  "primary_target": "app/application/analyzer.py",\n'
+            '  "repair_targets": ["app/application/analyzer.py"],\n'
+            '  "secondary_targets": ["tests/test_analyzer.py"]\n'
+            "}"
+        ),
+    )
+
+    assert '"primary_target": "app/application/analyzer.py"' in prompt
+    assert "Prioritize the repair plan primary_target." in prompt
+    assert "Implement the repair plan primary target before secondary targets." in prompt
+    assert "Modify tests only when the test assertion/import is wrong" in prompt
 
 
 def test_fix_workspace_context_excludes_cache_and_includes_nested_python(tmp_path):

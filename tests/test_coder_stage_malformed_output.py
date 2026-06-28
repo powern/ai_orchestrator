@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 
 from studio.core import stages
@@ -45,6 +47,26 @@ class AlwaysInvalidAdapter:
             self.retry_prompts.append(user_prompt)
 
         return '[{"action":"write_file","path":"app/main.py","content":"unterminated}'
+
+
+class FailOnceThenValidSanitizer:
+    calls = 0
+
+    def __init__(self, adapter, model):
+        pass
+
+    def process(self, coder_output, max_attempts=2):
+        type(self).calls += 1
+        if type(self).calls == 1:
+            raise ValueError("Expecting ',' delimiter")
+
+        actions = [{"action": "mkdir", "path": "app"}]
+        return SimpleNamespace(
+            actions=actions,
+            attempts=1,
+            retried=False,
+            program=SimpleNamespace(to_dicts=lambda: actions),
+        )
 
 
 def create_run_for_coder_stage(description="Build a small app"):
@@ -109,3 +131,27 @@ def test_coder_stage_fails_cleanly_after_three_invalid_retries(monkeypatch):
     assert "run_failed" in event_types
     assert "pipeline_failed" not in event_types
     assert len(adapter.retry_prompts) == 3
+
+
+def test_coder_retry_prompt_rejects_triple_quoted_content(monkeypatch):
+    raw_output = (
+        '[{"action":"write_file","path":"app/main.py","content": """\n'
+        "print(\"Hello\")\n"
+        '"""}]'
+    )
+    adapter = RetryThenSuccessAdapter(raw_output)
+    FailOnceThenValidSanitizer.calls = 0
+    monkeypatch.setattr(stages, "LLMAdapter", lambda: adapter)
+    monkeypatch.setattr(stages, "ActionSanitizerAgent", FailOnceThenValidSanitizer)
+
+    run_id = create_run_for_coder_stage()
+
+    output = run_coder_placeholder(run_id, "planner", "architect")
+
+    assert output is not None
+    assert adapter.retry_prompts
+    prompt = adapter.retry_prompts[0]
+    assert "Do not use triple quoted strings" in prompt
+    assert "Escape newlines with \\n" in prompt
+    assert "Every file content must be a normal JSON string" in prompt
+    assert "No Python literals" in prompt

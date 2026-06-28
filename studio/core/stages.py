@@ -231,12 +231,32 @@ Do not explain.
 Strict Executor JSON contract:
 - Root must be a JSON array.
 - Every item must be an object.
+- Output MUST be valid JSON.
+- Output MUST contain ONLY Executor JSON.
+- No markdown.
+- No ``` blocks.
+- No Python literals.
+- Do not use triple quoted strings.
+- Every file content must be a normal JSON string.
+- Escape newlines with \\n.
+- Escape quotes inside strings with \\".
+- Do not invent new action types.
+- Supported actions are ONLY: mkdir, write_file, read_file, run.
 - mkdir requires string fields: action, path.
 - write_file requires string fields: action, path, content.
 - read_file requires string fields: action, path.
 - run requires string fields: action, command.
 - Paths must be relative and must not contain traversal.
 - Do not put objects or arrays inside path, content, or command.
+- Replace unsupported actions such as install_packages with supported Executor actions.
+
+BAD:
+"content": \"\"\"
+print("Hello")
+\"\"\"
+
+GOOD:
+"content": "print(\\"Hello\\")\\nprint(\\"World\\")\\n"
 
 Previous parser error:
 {error}

@@ -103,6 +103,14 @@ def test_run_detail_template_exposes_navigation_and_stage_outputs():
     save_stage_output(run_id, "fix_sanitizer_error", "fix error")
     save_stage_output(run_id, "tester_output_after_fix", "tester after")
     save_stage_output(run_id, "result", "x" * 5000)
+    publish_run_event(
+        run_id,
+        project_id,
+        "coder_completed",
+        "coder",
+        "Coder completed with payload.",
+        "large payload body",
+    )
 
     client = app.test_client()
     response = client.get(f"/runs/{run_id}")
@@ -127,3 +135,5 @@ def test_run_detail_template_exposes_navigation_and_stage_outputs():
     assert "Final Result" in html
     assert "tester after" in html
     assert "<pre>" in html
+    assert "View Payload" in html
+    assert "large payload body" in html
