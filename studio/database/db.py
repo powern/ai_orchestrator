@@ -53,6 +53,8 @@ def init_db():
                 coder_output TEXT,
                 coder_sanitizer_error TEXT,
                 executor_output TEXT,
+                failure_analysis TEXT,
+                repair_plan TEXT,
                 fix_raw_output TEXT,
                 fix_output TEXT,
                 fix_sanitizer_error TEXT,

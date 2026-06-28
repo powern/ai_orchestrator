@@ -279,10 +279,35 @@ def run_tester_stage(run_id, workspace_path):
     if not tester_result.success:
         try:
             from studio.core.bug_report import BugReportBuilder
+            from studio.core.failure_analysis import FailureAnalyzer
             from studio.core.fix_prompt import FixPromptBuilder, FixWorkspaceContextBuilder
+            from studio.core.repair_plan import RepairPlanner
 
             bug_report = BugReportBuilder().build(tester_result)
             save_stage_output(run_id, "bug_report", bug_report)
+            analysis = FailureAnalyzer().analyze(workspace_path, tester_result, bug_report)
+            repair_plan = RepairPlanner().plan(analysis)
+            repair_plan_json = repair_plan.to_json()
+            save_stage_output(
+                run_id,
+                "failure_analysis",
+                json.dumps(analysis.to_dict(), ensure_ascii=False, indent=2),
+            )
+            save_stage_output(run_id, "repair_plan", repair_plan_json)
+            add_event(
+                run_id,
+                "failure_analyzed",
+                "failure_analyzer",
+                "Failure Analyzer identified probable root cause.",
+                json.dumps(analysis.to_dict(), ensure_ascii=False, indent=2),
+            )
+            add_event(
+                run_id,
+                "repair_planned",
+                "repair_planner",
+                "Repair Planner generated structured repair instructions.",
+                repair_plan_json,
+            )
 
             coder_output = get_stage_output(run_id, "coder_output") or ""
             executor_output = get_stage_output(run_id, "executor_output") or ""
@@ -296,6 +321,7 @@ def run_tester_stage(run_id, workspace_path):
                 workspace_tree=context_builder.build_tree(workspace_path),
                 bug_report=bug_report,
                 executor_output=executor_output,
+                repair_plan=repair_plan_json,
             )
 
             save_stage_output(run_id, "result", fix_prompt)
@@ -329,7 +355,9 @@ def run_tester_stage(run_id, workspace_path):
 
 def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
     from studio.config.settings import DEFAULT_MODELS
+    from studio.core.failure_analysis import FailureAnalyzer
     from studio.core.fix_prompt import FixPromptBuilder, FixWorkspaceContextBuilder
+    from studio.core.repair_plan import RepairPlanner
 
     update_run_status(run_id, "running", "fix")
 
@@ -344,6 +372,15 @@ def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
     task_description = get_task_description_for_run(run_id)
     bug_report = get_stage_output(run_id, "bug_report") or ""
     executor_output = get_stage_output(run_id, "executor_output") or ""
+    analysis = FailureAnalyzer().analyze(workspace_path, tester_result, bug_report)
+    repair_plan = RepairPlanner().plan(analysis)
+    repair_plan_json = repair_plan.to_json()
+    save_stage_output(
+        run_id,
+        "failure_analysis",
+        json.dumps(analysis.to_dict(), ensure_ascii=False, indent=2),
+    )
+    save_stage_output(run_id, "repair_plan", repair_plan_json)
     context_builder = FixWorkspaceContextBuilder()
     workspace_files = context_builder.build(workspace_path, tester_result)
 
@@ -355,6 +392,7 @@ def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
         workspace_tree=context_builder.build_tree(workspace_path),
         bug_report=bug_report,
         executor_output=executor_output,
+        repair_plan=repair_plan_json,
     )
 
     fix_output = adapter.ask(

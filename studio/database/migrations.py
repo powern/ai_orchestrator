@@ -38,6 +38,12 @@ def migrate():
         if "executor_output" not in columns:
             conn.execute("ALTER TABLE runs ADD COLUMN executor_output TEXT")
 
+        if "failure_analysis" not in columns:
+            conn.execute("ALTER TABLE runs ADD COLUMN failure_analysis TEXT")
+
+        if "repair_plan" not in columns:
+            conn.execute("ALTER TABLE runs ADD COLUMN repair_plan TEXT")
+
         if "fix_raw_output" not in columns:
             conn.execute("ALTER TABLE runs ADD COLUMN fix_raw_output TEXT")
 

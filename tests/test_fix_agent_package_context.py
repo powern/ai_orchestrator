@@ -122,6 +122,9 @@ def test_fix_agent_uses_workspace_tree_for_nested_app_package_imports(monkeypatc
             assert "Executor created nested app package files." in user_prompt
             assert "No module named 'application" in user_prompt
             assert "from application.main import main" in user_prompt
+            assert "Repair plan:" in user_prompt
+            assert '"root_cause": "app/main.py"' in user_prompt
+            assert '"repair_targets":' in user_prompt
             assert "__pycache__" not in user_prompt
             assert ".pyc" not in user_prompt
 
@@ -190,5 +193,7 @@ def test_fix_agent_uses_workspace_tree_for_nested_app_package_imports(monkeypatc
     run = get_run(run_id)
 
     assert second_result.success
+    assert '"root_cause": "app/main.py"' in run["repair_plan"]
+    assert '"root_cause": "app/main.py"' in run["failure_analysis"]
     assert run["fix_raw_output"]
     assert run["fix_output"]

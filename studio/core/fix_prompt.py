@@ -152,17 +152,19 @@ class FixPromptBuilder:
         workspace_tree: str | None = None,
         bug_report: str | None = None,
         executor_output: str | None = None,
+        repair_plan: str | None = None,
     ) -> str:
         workspace_context = self._format_workspace_files(workspace_files or [])
         task_context = task_description or "Not available."
         tree_context = workspace_tree or "No workspace tree was available."
         bug_context = bug_report or "No bug report was available."
         executor_context = executor_output or "No executor output was available."
+        repair_context = repair_plan or "No repair plan was available."
 
         return f"""
 The generated project failed its tests.
 
-You must return ONLY Executor JSON actions that fix the existing workspace.
+You must return ONLY Executor JSON actions that implement the repair plan.
 Do not explain anything.
 Do not use markdown.
 
@@ -180,6 +182,9 @@ Current executor output:
 
 Current bug report:
 {bug_context}
+
+Repair plan:
+{repair_context}
 
 Test return code:
 {tester_result.returncode}
