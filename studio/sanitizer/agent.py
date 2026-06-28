@@ -71,6 +71,18 @@ Convert this to valid Executor JSON now.
         last_error = None
         current_input = coder_output
 
+        try:
+            result = JsonValidator().validate(current_input)
+            return SanitizerResult(
+                actions=result.actions,
+                raw_output=result.repaired_output,
+                attempts=1,
+                retried=False,
+                validation_error=None,
+            )
+        except Exception as exc:
+            last_error = exc
+
         for attempt in range(1, max_attempts + 1):
             sanitized_output = self.sanitize(current_input)
 
