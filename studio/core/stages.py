@@ -353,7 +353,15 @@ def run_tester_stage(run_id, workspace_path):
     return tester_result
 
 
-def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
+def run_fix_stage(
+    run_id,
+    workspace_path,
+    coder_output,
+    tester_result,
+    previous_error=None,
+    previous_raw_output=None,
+    emit_started=True,
+):
     from studio.config.settings import DEFAULT_MODELS
     from studio.core.failure_analysis import FailureAnalyzer
     from studio.core.fix_prompt import FixPromptBuilder, FixWorkspaceContextBuilder
@@ -361,12 +369,13 @@ def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
 
     update_run_status(run_id, "running", "fix")
 
-    add_event(
-        run_id,
-        "fix_started",
-        "fix",
-        "Fix stage started after tester failure.",
-    )
+    if emit_started:
+        add_event(
+            run_id,
+            "fix_started",
+            "fix",
+            "Fix stage started after tester failure.",
+        )
 
     adapter = LLMAdapter()
     task_description = get_task_description_for_run(run_id)
@@ -395,6 +404,23 @@ def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
         repair_plan=repair_plan_json,
     )
 
+    if previous_error is not None:
+        fix_prompt = f"""
+{fix_prompt}
+
+Previous Fix Agent response could not be sanitized.
+
+Return ONLY Executor JSON actions.
+Do not use markdown.
+Do not explain.
+
+Previous sanitizer error:
+{previous_error}
+
+Previous raw Fix Agent response:
+{previous_raw_output or ""}
+""".strip()
+
     fix_output = adapter.ask(
         model=DEFAULT_MODELS["coder"],
         system_prompt="You fix generated projects by returning Executor JSON only.",
@@ -409,14 +435,6 @@ def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
         "fix_generated",
         "fix",
         "Fix actions generated.",
-        fix_output,
-    )
-
-    add_event(
-        run_id,
-        "fix_completed",
-        "fix",
-        "Fix actions generated and waiting for sanitizer/static review.",
         fix_output,
     )
 

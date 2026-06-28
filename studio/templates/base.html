@@ -11,6 +11,7 @@
         .btn { display: inline-block; padding: 10px 14px; background: #0d6efd; color: white; text-decoration: none; border-radius: 6px; border: 0; cursor: pointer; }
         .btn-green { background: #198754; }
         .btn-secondary { background: #6c757d; }
+        .disabled { opacity: 0.55; cursor: default; }
         .status { padding: 4px 8px; border-radius: 6px; background: #eee; }
         .status-running { background: #fff3cd; }
         .status-completed { background: #d1e7dd; }
@@ -27,6 +28,9 @@
         textarea { height: 260px; }
         .error { color: #b00020; margin-bottom: 12px; }
         pre { white-space: pre-wrap; background: #111; color: #eee; padding: 14px; border-radius: 8px; }
+        details.stage-output { margin: 14px 0; }
+        details.stage-output summary { cursor: pointer; font-weight: bold; }
+        details.stage-output pre { max-height: 460px; overflow: auto; overflow-wrap: anywhere; }
         .muted { color: #666; }
     </style>
 </head>
@@ -37,32 +41,9 @@
         <a class="btn" href="/">Projects</a>
         <a class="btn" href="/projects/new">New Project</a>
     </div>
-    <main data-refresh-root>
+    <main>
     {% block content %}{% endblock %}
     </main>
 </div>
-<script>
-const refreshRoot = document.querySelector("[data-refresh-root]");
-if (refreshRoot) {
-    window.setInterval(async () => {
-        if (document.hidden) {
-            return;
-        }
-        try {
-            const response = await fetch(window.location.href, {
-                headers: { "X-Requested-With": "fetch" },
-            });
-            const text = await response.text();
-            const nextDocument = new DOMParser().parseFromString(text, "text/html");
-            const nextRoot = nextDocument.querySelector("[data-refresh-root]");
-            if (nextRoot) {
-                refreshRoot.innerHTML = nextRoot.innerHTML;
-            }
-        } catch (error) {
-            console.debug("Auto refresh skipped", error);
-        }
-    }, 5000);
-}
-</script>
 </body>
 </html>

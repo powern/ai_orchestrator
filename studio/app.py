@@ -12,7 +12,13 @@ from studio.services.project_service import (
     get_project_summary,
     list_project_summaries,
 )
-from studio.services.run_service import create_run_if_not_active, get_run, list_runs_for_project
+from studio.services.run_service import (
+    create_run_if_not_active,
+    get_next_run,
+    get_previous_run,
+    get_run,
+    list_runs_for_project,
+)
 from studio.services.runtime_service import get_project_runtime
 
 app = Flask(__name__)
@@ -107,8 +113,20 @@ def run_detail(run_id):
     if run is None:
         abort(404)
 
+    project = get_project(run["project_id"])
+    runtime = get_project_runtime(run["project_id"])
+    previous_run = get_previous_run(run_id)
+    next_run = get_next_run(run_id)
     events = list_events(run_id)
-    return render_template("run_detail.html", run=run, events=events)
+    return render_template(
+        "run_detail.html",
+        run=run,
+        project=project,
+        runtime=runtime,
+        previous_run=previous_run,
+        next_run=next_run,
+        events=events,
+    )
 
 
 @app.get("/api/projects")
@@ -145,12 +163,26 @@ def api_run(run_id):
     if run is None:
         abort(404)
 
-    return jsonify({"run": row_to_dict(run)})
+    project = get_project(run["project_id"])
+    runtime = get_project_runtime(run["project_id"])
+    return jsonify(
+        {
+            "run": row_to_dict(run),
+            "project": row_to_dict(project),
+            "runtime": row_to_dict(runtime),
+            "events": [dict(row) for row in list_events(run_id)],
+        }
+    )
 
 
 @app.get("/api/runtime")
 def api_runtime():
-    return jsonify({"metrics": get_dashboard_metrics()})
+    return jsonify(
+        {
+            "metrics": get_dashboard_metrics(),
+            "projects": list_project_summaries(),
+        }
+    )
 
 
 @app.get("/api/events/<int:run_id>")

@@ -3,7 +3,7 @@ from studio.database.db import init_db
 from studio.database.migrations import migrate
 from studio.services.event_service import list_events
 from studio.services.project_service import create_project
-from studio.services.run_service import create_run_if_not_active
+from studio.services.run_service import create_run, create_run_if_not_active, save_stage_output
 
 
 def test_run_project_route_reuses_existing_active_run():
@@ -37,3 +37,66 @@ def test_project_detail_template_includes_run_form_guard():
     assert f'action="/projects/{project_id}/run"' in html
     assert "data-run-form" in html
     assert "Starting..." in html
+
+
+def test_dashboard_template_contains_runtime_polling():
+    init_db()
+    migrate()
+
+    create_project("Polling Project", "Test")
+
+    client = app.test_client()
+    response = client.get("/")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "refreshDashboardRuntime" in html
+    assert 'fetch("/api/runtime")' in html
+    assert "data-project-status" in html
+    assert "data-project-progress-bar" in html
+
+
+def test_run_detail_template_exposes_navigation_and_stage_outputs():
+    init_db()
+    migrate()
+
+    project_id = create_project("Run Detail Project", "Test")
+    previous_run_id = create_run(project_id)
+    run_id = create_run(project_id)
+    next_run_id = create_run(project_id)
+
+    save_stage_output(run_id, "planner_output", "planner")
+    save_stage_output(run_id, "architect_output", "architect")
+    save_stage_output(run_id, "coder_raw_output", "raw coder")
+    save_stage_output(run_id, "coder_sanitizer_error", "coder error")
+    save_stage_output(run_id, "coder_output", "coder")
+    save_stage_output(run_id, "executor_output", "executor")
+    save_stage_output(run_id, "tester_output", "tester")
+    save_stage_output(run_id, "bug_report", "bug")
+    save_stage_output(run_id, "failure_analysis", "analysis")
+    save_stage_output(run_id, "repair_plan", "plan")
+    save_stage_output(run_id, "fix_output", "fix")
+    save_stage_output(run_id, "fix_raw_output", "raw fix")
+    save_stage_output(run_id, "fix_sanitizer_error", "fix error")
+    save_stage_output(run_id, "tester_output_after_fix", "tester after")
+
+    client = app.test_client()
+    response = client.get(f"/runs/{run_id}")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert f"Run #{run_id}" in html
+    assert f'href="/runs/{previous_run_id}"' in html
+    assert f'href="/runs/{next_run_id}"' in html
+    assert 'href="/"' in html
+    assert "Project Name: Run Detail Project" in html
+    assert "Planner Output" in html
+    assert "Architect Output" in html
+    assert "Coder Raw Output" in html
+    assert "Coder Sanitizer Error" in html
+    assert "Executor Output" in html
+    assert "Failure Analysis" in html
+    assert "Repair Plan" in html
+    assert "Fix Raw Output" in html
+    assert "Fix Sanitizer Error" in html
+    assert "tester after" in html

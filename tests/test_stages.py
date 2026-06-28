@@ -220,7 +220,7 @@ def test_run_fix_stage_generates_fix_actions_without_execution(monkeypatch):
 
     assert "fix_started" in event_types
     assert "fix_generated" in event_types
-    assert "fix_completed" in event_types
+    assert "fix_completed" not in event_types
 
 
 def test_run_architect_stage_saves_llm_output_and_events(monkeypatch):

@@ -1,6 +1,10 @@
 import json
 
-from studio.config.settings import DEFAULT_MODELS, FIX_MAX_SANITIZE_ATTEMPTS
+from studio.config.settings import (
+    DEFAULT_MODELS,
+    FIX_MAX_OUTPUT_RETRIES,
+    FIX_MAX_SANITIZE_ATTEMPTS,
+)
 from studio.core.json_utils import normalize_coder_json
 from studio.core.llm_adapter import LLMAdapter
 from studio.core.stages import (
@@ -85,34 +89,71 @@ def sanitize_fix_output(run_id, fix_output):
     return result.actions, normalized_output
 
 
-def sanitize_fix_output_or_fail(run_id, fix_output):
-    try:
-        return sanitize_fix_output(run_id, fix_output)
-    except Exception as exc:
-        update_run_status(
-            run_id,
-            "failed",
-            "fix_failed",
-            f"Fix output could not be sanitized: {exc}",
-        )
+def sanitize_fix_output_or_fail(run_id, fix_output, workspace_path, coder_output, tester_result):
+    current_output = fix_output
+
+    for retry_number in range(0, FIX_MAX_OUTPUT_RETRIES + 1):
+        try:
+            sanitized_fix = sanitize_fix_output(run_id, current_output)
+        except Exception as exc:
+            save_stage_output(run_id, "fix_sanitizer_error", str(exc))
+
+            if retry_number >= FIX_MAX_OUTPUT_RETRIES:
+                update_run_status(
+                    run_id,
+                    "failed",
+                    "fix_failed",
+                    f"Fix output could not be sanitized: {exc}",
+                )
+
+                add_event(
+                    run_id,
+                    "fix_failed",
+                    "fix_failed",
+                    "Fix output could not be sanitized after retries.",
+                    str(exc),
+                )
+
+                add_event(
+                    run_id,
+                    "run_failed",
+                    "fix_failed",
+                    "Run failed because fix output was invalid.",
+                    str(exc),
+                )
+
+                return None
+
+            add_event(
+                run_id,
+                "fix_retry",
+                "fix",
+                f"Fix retry #{retry_number + 1} after sanitizer error.",
+                str(exc),
+            )
+
+            fix_result = run_fix_stage(
+                run_id,
+                workspace_path,
+                coder_output,
+                tester_result,
+                previous_error=exc,
+                previous_raw_output=current_output,
+                emit_started=False,
+            )
+            current_output = fix_result["output"]
+            continue
 
         add_event(
             run_id,
-            "fix_failed",
-            "fix_failed",
-            "Fix output could not be sanitized.",
-            str(exc),
+            "fix_completed",
+            "fix",
+            "Fix output sanitized and ready for static review.",
+            sanitized_fix[1],
         )
+        return sanitized_fix
 
-        add_event(
-            run_id,
-            "run_failed",
-            "fix_failed",
-            "Run failed because fix output was invalid.",
-            str(exc),
-        )
-
-        return None
+    return None
 
 
 class RunPipeline:
@@ -175,6 +216,9 @@ class RunPipeline:
             sanitized_fix = sanitize_fix_output_or_fail(
                 run_id,
                 fix_result["output"],
+                project["workspace_path"],
+                coder_output,
+                static_failure,
             )
             if sanitized_fix is None:
                 return
@@ -244,6 +288,9 @@ class RunPipeline:
         sanitized_fix = sanitize_fix_output_or_fail(
             run_id,
             fix_result["output"],
+            project["workspace_path"],
+            coder_output,
+            tester_result,
         )
         if sanitized_fix is None:
             return

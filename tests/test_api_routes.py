@@ -38,5 +38,9 @@ def test_api_project_run_events_and_runtime():
     assert project_response.status_code == 200
     assert project_response.get_json()["runtime"]["status"] == "completed"
     assert run_response.get_json()["run"]["id"] == run_id
+    assert run_response.get_json()["project"]["id"] == project_id
+    assert run_response.get_json()["runtime"]["status"] == "completed"
+    assert run_response.get_json()["events"][0]["event_type"] == "run_completed"
     assert events_response.get_json()["events"][0]["event_type"] == "run_completed"
     assert runtime_response.get_json()["metrics"]["total_runs"] >= 1
+    assert runtime_response.get_json()["projects"]

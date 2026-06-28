@@ -3,51 +3,58 @@
 {% block content %}
 <h2>Run #{{ run.id }}</h2>
 
-<p>Project ID: {{ run.project_id }}</p>
-<p>Status: <span class="status status-{{ run.status }}">{{ run.status }}</span></p>
-<p>Stage: {{ run.current_stage }}</p>
-<p>Created: {{ run.created_at }}</p>
-<p>Updated: {{ run.updated_at }}</p>
+<p>
+    {% if previous_run %}
+        <a class="btn btn-secondary" href="/runs/{{ previous_run.id }}">Previous run</a>
+    {% else %}
+        <span class="btn btn-secondary disabled">Previous run</span>
+    {% endif %}
+    {% if next_run %}
+        <a class="btn btn-secondary" href="/runs/{{ next_run.id }}">Next run</a>
+    {% else %}
+        <span class="btn btn-secondary disabled">Next run</span>
+    {% endif %}
+    <a class="btn btn-secondary" href="/">Back to dashboard</a>
+    <a class="btn btn-secondary" href="/projects/{{ run.project_id }}">Back to project</a>
+</p>
 
+<section class="run-summary">
+    <p>Run ID: {{ run.id }}</p>
+    <p>Project ID: {{ run.project_id }}</p>
+    <p>Project Name: {{ project.name if project else 'unknown' }}</p>
+    <p>Status: <span class="status status-{{ run.status }}">{{ run.status }}</span></p>
+    <p>Stage: {{ run.current_stage }}</p>
+    <p>Progress: {{ runtime.progress if runtime else 'empty' }}%</p>
+    <p>Message: {{ runtime.message if runtime and runtime.message else 'empty' }}</p>
+    <p>Created: {{ run.created_at }}</p>
+    <p>Updated: {{ run.updated_at }}</p>
+</section>
 
-<h3>Planner Output</h3>
-<pre>{{ run.planner_output or 'No planner output yet.' }}</pre>
+{% set output_sections = [
+    ('Planner Output', run.planner_output),
+    ('Architect Output', run.architect_output),
+    ('Coder Output', run.coder_output),
+    ('Coder Raw Output', run.coder_raw_output),
+    ('Coder Sanitizer Error', run.coder_sanitizer_error),
+    ('Executor Output', run.executor_output),
+    ('Tester Output', run.tester_output),
+    ('Tester Output Before Fix', run.tester_output_before_fix),
+    ('Bug Report', run.bug_report),
+    ('Failure Analysis', run.failure_analysis),
+    ('Repair Plan', run.repair_plan),
+    ('Fix Output', run.fix_output),
+    ('Fix Raw Output', run.fix_raw_output),
+    ('Fix Sanitizer Error', run.fix_sanitizer_error),
+    ('Tester Output After Fix', run.tester_output_after_fix),
+    ('Result', run.result)
+] %}
 
-<h3>Raw Coder Output</h3>
-<pre>{{ run.coder_raw_output or 'No raw coder output yet.' }}</pre>
-
-<h3>Coder Sanitizer Error</h3>
-<pre>{{ run.coder_sanitizer_error or 'No coder sanitizer error.' }}</pre>
-
-<h3>Coder Output</h3>
-<pre>{{ run.coder_output or 'No coder output yet.' }}</pre>
-
-<h3>Executor Output</h3>
-<pre>{{ run.executor_output or 'No executor output yet.' }}</pre>
-
-<h3>First Tester Output</h3>
-<pre>{{ run.tester_output_before_fix or run.tester_output or 'No tester output yet.' }}</pre>
-
-<h3>Fix Actions</h3>
-<pre>{{ run.fix_output or 'No fix output yet.' }}</pre>
-
-<h3>Raw Fix Output</h3>
-<pre>{{ run.fix_raw_output or 'No raw fix output yet.' }}</pre>
-
-<h3>Fix Sanitizer Error</h3>
-<pre>{{ run.fix_sanitizer_error or 'No fix sanitizer error.' }}</pre>
-
-<h3>Second Tester Output</h3>
-<pre>{{ run.tester_output_after_fix or 'No post-fix tester output yet.' }}</pre>
-
-<h3>Bug Report</h3>
-<pre>{{ run.bug_report or 'No bug report yet.' }}</pre>
-
-<h3>Failure Analysis</h3>
-<pre>{{ run.failure_analysis or 'No failure analysis yet.' }}</pre>
-
-<h3>Repair Plan</h3>
-<pre>{{ run.repair_plan or 'No repair plan yet.' }}</pre>
+{% for title, value in output_sections %}
+<details class="stage-output" open>
+    <summary>{{ title }}</summary>
+    <pre>{{ value or 'empty' }}</pre>
+</details>
+{% endfor %}
 
 <h3>Events</h3>
 

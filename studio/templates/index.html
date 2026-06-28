@@ -3,25 +3,27 @@
 {% block content %}
 <h2>Projects</h2>
 
-<section class="dashboard">
-    <div class="metric">Projects<strong>{{ metrics.total_projects }}</strong></div>
-    <div class="metric">Queued<strong>{{ metrics.queued }}</strong></div>
-    <div class="metric">Running<strong>{{ metrics.running }}</strong></div>
-    <div class="metric">Completed<strong>{{ metrics.completed }}</strong></div>
-    <div class="metric">Failed<strong>{{ metrics.failed }}</strong></div>
-    <div class="metric">Runs<strong>{{ metrics.total_runs }}</strong></div>
-    <div class="metric">Success<strong>{{ metrics.success_rate }}%</strong></div>
-    <div class="metric">Scheduler<strong>{{ metrics.scheduler_status }}</strong></div>
+<section class="dashboard" data-dashboard-metrics>
+    <div class="metric">Projects<strong data-metric="total_projects">{{ metrics.total_projects }}</strong></div>
+    <div class="metric">Queued<strong data-metric="queued">{{ metrics.queued }}</strong></div>
+    <div class="metric">Running<strong data-metric="running">{{ metrics.running }}</strong></div>
+    <div class="metric">Completed<strong data-metric="completed">{{ metrics.completed }}</strong></div>
+    <div class="metric">Failed<strong data-metric="failed">{{ metrics.failed }}</strong></div>
+    <div class="metric">Runs<strong data-metric="total_runs">{{ metrics.total_runs }}</strong></div>
+    <div class="metric">Success<strong data-metric="success_rate">{{ metrics.success_rate }}%</strong></div>
+    <div class="metric">Scheduler<strong data-metric="scheduler_status">{{ metrics.scheduler_status }}</strong></div>
 </section>
 
+<p data-active-run>
 {% if metrics.active_run %}
-<p>Active run: <a href="/runs/{{ metrics.active_run.id }}">#{{ metrics.active_run.id }}</a></p>
+Active run: <a href="/runs/{{ metrics.active_run.id }}">#{{ metrics.active_run.id }}</a>
 {% else %}
-<p class="muted">No active run.</p>
+<span class="muted">No active run.</span>
 {% endif %}
+</p>
 
 {% if projects %}
-<table>
+<table data-project-table>
     <tr>
         <th>ID</th>
         <th>Name</th>
@@ -33,25 +35,25 @@
         <th>Created</th>
     </tr>
     {% for project in projects %}
-    <tr>
+    <tr data-project-id="{{ project.id }}">
         <td>{{ project.id }}</td>
         <td><a href="/projects/{{ project.id }}">{{ project.name }}</a></td>
         {% set status = project.runtime_status or project.status %}
-        <td><span class="status status-{{ status }}">{{ status }}</span></td>
-        <td>{{ project.runtime_stage or project.last_run_stage or 'new' }}</td>
-        <td>
+        <td><span data-project-status class="status status-{{ status }}">{{ status }}</span></td>
+        <td data-project-stage>{{ project.runtime_stage or project.last_run_stage or 'new' }}</td>
+        <td data-project-progress-cell>
             {% set progress = project.runtime_progress or 0 %}
-            <div class="progress"><div class="progress-bar" style="width: {{ progress }}%"></div></div>
-            {{ progress }}%
+            <div class="progress"><div data-project-progress-bar class="progress-bar" style="width: {{ progress }}%"></div></div>
+            <span data-project-progress-text>{{ progress }}%</span>
         </td>
-        <td>
+        <td data-project-last-run>
             {% if project.last_run_id %}
                 <a href="/runs/{{ project.last_run_id }}">#{{ project.last_run_id }}</a>
             {% else %}
                 <span class="muted">none</span>
             {% endif %}
         </td>
-        <td>
+        <td data-project-indicator>
             {% if status == 'running' %}Running{% elif status == 'completed' %}Completed{% elif status == 'failed' %}Failed{% else %}Idle{% endif %}
         </td>
         <td>{{ project.created_at }}</td>
@@ -61,4 +63,53 @@
 {% else %}
 <p>No projects yet.</p>
 {% endif %}
+<script>
+async function refreshDashboardRuntime() {
+    try {
+        const response = await fetch("/api/runtime");
+        const payload = await response.json();
+        const metrics = payload.metrics || {};
+        document.querySelectorAll("[data-metric]").forEach((node) => {
+            const key = node.dataset.metric;
+            const value = key === "success_rate" ? `${metrics[key] || 0}%` : metrics[key];
+            if (value !== undefined && value !== null) {
+                node.textContent = value;
+            }
+        });
+
+        const activeRunNode = document.querySelector("[data-active-run]");
+        if (activeRunNode) {
+            if (metrics.active_run) {
+                activeRunNode.innerHTML = `Active run: <a href="/runs/${metrics.active_run.id}">#${metrics.active_run.id}</a>`;
+            } else {
+                activeRunNode.innerHTML = '<span class="muted">No active run.</span>';
+            }
+        }
+
+        (payload.projects || []).forEach((project) => {
+            const row = document.querySelector(`[data-project-id="${project.id}"]`);
+            if (!row) {
+                return;
+            }
+            const status = project.runtime_status || project.status || "queued";
+            const stage = project.runtime_stage || project.last_run_stage || "new";
+            const progress = project.runtime_progress || 0;
+            const statusNode = row.querySelector("[data-project-status]");
+            statusNode.textContent = status;
+            statusNode.className = `status status-${status}`;
+            row.querySelector("[data-project-stage]").textContent = stage;
+            row.querySelector("[data-project-progress-bar]").style.width = `${progress}%`;
+            row.querySelector("[data-project-progress-text]").textContent = `${progress}%`;
+            row.querySelector("[data-project-indicator]").textContent =
+                status === "running" ? "Running" :
+                status === "completed" ? "Completed" :
+                status === "failed" ? "Failed" : "Idle";
+        });
+    } catch (error) {
+        console.debug("Dashboard runtime poll failed", error);
+    }
+}
+
+window.setInterval(refreshDashboardRuntime, 3000);
+</script>
 {% endblock %}

@@ -83,6 +83,34 @@ def get_run(run_id):
         ).fetchone()
 
 
+def get_previous_run(run_id):
+    with get_connection() as conn:
+        return conn.execute(
+            """
+            SELECT *
+            FROM runs
+            WHERE id < ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (run_id,),
+        ).fetchone()
+
+
+def get_next_run(run_id):
+    with get_connection() as conn:
+        return conn.execute(
+            """
+            SELECT *
+            FROM runs
+            WHERE id > ?
+            ORDER BY id ASC
+            LIMIT 1
+            """,
+            (run_id,),
+        ).fetchone()
+
+
 def get_next_queued_run():
     with get_connection() as conn:
         return conn.execute("""
