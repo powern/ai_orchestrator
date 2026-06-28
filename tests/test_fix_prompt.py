@@ -157,6 +157,29 @@ def test_fix_prompt_prioritizes_repair_plan_primary_target():
     assert "Modify tests only when the test assertion/import is wrong" in prompt
 
 
+def test_fix_prompt_includes_flask_visual_run_readiness_hints():
+    tester_result = StageTestResult(
+        success=False,
+        returncode=1,
+        stdout="FAILED tests/test_main.py",
+        stderr="AssertionError",
+    )
+
+    prompt = FixPromptBuilder().build(
+        original_coder_output="[]",
+        tester_result=tester_result,
+        task_description="Create a Flask Counter app for Visual Smoke Test.",
+    )
+
+    assert "python app/main.py" in prompt
+    assert 'app.run(host="0.0.0.0", port=5000)' in prompt
+    assert "redirect, url_for, or render_template_string" in prompt
+    assert "Visual Smoke Test" in prompt
+    assert "Counter: 0" in prompt
+    assert "Counter: 1" in prompt
+    assert "RUN.md" in prompt
+
+
 def test_fix_workspace_context_excludes_cache_and_includes_nested_python(tmp_path):
     app_dir = tmp_path / "app"
     nested_dir = app_dir / "application"

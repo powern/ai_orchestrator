@@ -277,6 +277,17 @@ Important Python fix hints:
   the top of tests/test_main.py.
 - Prefer fixing tests/test_main.py when the implementation in app/main.py is already correct.
 
+Important Flask visual app readiness hints:
+- If this is a simple Flask or visual smoke-test app, make it manually runnable with
+  "python app/main.py" when app/main.py exists.
+- Include if __name__ == "__main__": app.run(host="0.0.0.0", port=5000).
+- If code uses redirect, url_for, or render_template_string, import those names from flask.
+- Expose a real Flask app object named app.
+- Tests should verify visible text and behavior, not only status code.
+- For counter apps, verify Visual Smoke Test, Counter: 0, Increase, Reset, increase to
+  Counter: 1, and reset back to Counter: 0.
+- Add RUN.md with install, run, and open-browser instructions for visual apps.
+
 Return fix actions now.
 """.strip()
 

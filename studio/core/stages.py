@@ -80,6 +80,16 @@ Safety rules:
 - Generate files only for the target project workspace.
 
 Prefer creating a minimal working Python project with tests.
+
+For simple Flask or visual smoke-test web apps:
+- Make the app manually runnable with python app/main.py when app/main.py exists.
+- Include if __name__ == "__main__": app.run(host="0.0.0.0", port=5000).
+- If using redirect, url_for, or render_template_string, import them from flask.
+- Expose a real Flask app object named app.
+- Add tests for visible page text and user-visible state changes, not only HTTP 200.
+- For counter apps, tests should verify title text, Counter: 0, Increase, Reset,
+  increase changes the visible counter to 1, and reset changes it back to 0.
+- Add RUN.md with install, run, and open-browser instructions for visual apps.
 """
 
     user_prompt = f"""
@@ -566,6 +576,8 @@ Constraints:
 - no markdown
 - no explanations
 - no code
+- for Flask visual apps, app/main.py must be runnable with python app/main.py
+- for Flask visual apps, include RUN.md and visible behavior tests
 """
 
     user_prompt = f"""

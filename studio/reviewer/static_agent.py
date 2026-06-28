@@ -2,6 +2,8 @@ from studio.core.agent import BaseAgent
 from studio.execution_model.program import ExecutorProgram
 from studio.reviewer.result import ReviewerResult
 
+FLASK_HELPERS = ("redirect", "url_for", "render_template_string")
+
 
 class StaticReviewerAgent(BaseAgent):
     name = "static_reviewer"
@@ -41,6 +43,8 @@ class StaticReviewerAgent(BaseAgent):
                 if content.strip() == "pass":
                     findings.append(f"Suspicious pass-only file: {path}")
 
+                findings.extend(self._review_flask_file(path, content))
+
             if action_type == "run":
                 command = action.get("command", "")
 
@@ -63,6 +67,9 @@ class StaticReviewerAgent(BaseAgent):
             "Path traversal",
             "Dangerous command",
             "Placeholder text",
+            "Flask app",
+            "Flask helper",
+            "Flask route",
         )
 
         approved = score >= 80 and not any(
@@ -78,3 +85,51 @@ class StaticReviewerAgent(BaseAgent):
 
     def review(self, actions: list) -> ReviewerResult:
         return self.run(actions)
+
+    def _review_flask_file(self, path: str | None, content: str) -> list[str]:
+        if not path or not path.endswith(".py") or not path.startswith("app"):
+            return []
+
+        findings = []
+        uses_flask = "Flask(" in content or "@app.route" in content
+        if not uses_flask:
+            return findings
+
+        if (
+            "Flask(" in content
+            and "from flask import" not in content
+            and "import flask" not in content
+        ):
+            findings.append(f"Flask app uses Flask but does not import it in {path}")
+
+        for helper in FLASK_HELPERS:
+            if f"{helper}(" in content and not self._imports_flask_name(content, helper):
+                findings.append(f"Flask helper {helper} used but not imported in {path}")
+
+        if "@app.route" in content and "app = Flask(" not in content:
+            findings.append(f"Flask route exists but app object is not defined in {path}")
+
+        if self._is_visual_flask_entrypoint(path, content):
+            if "app.run(" not in content:
+                findings.append(f"Flask app is missing manual app.run entrypoint in {path}")
+            elif "host=\"0.0.0.0\"" not in content or "port=5000" not in content:
+                findings.append(
+                    f"Flask app.run should use host=\"0.0.0.0\" and port=5000 in {path}"
+                )
+
+        return findings
+
+    def _imports_flask_name(self, content: str, name: str) -> bool:
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("from flask import "):
+                continue
+            imported = stripped.removeprefix("from flask import ")
+            names = {item.strip().split(" as ")[0] for item in imported.split(",")}
+            if name in names:
+                return True
+
+        return False
+
+    def _is_visual_flask_entrypoint(self, path: str, content: str) -> bool:
+        return path in {"app/main.py", "app/app.py", "app.py"} and "@app.route" in content

@@ -35,6 +35,13 @@ def test_run_coder_placeholder_saves_json_output_and_events(monkeypatch):
 
     class FakeLLMAdapter:
         def ask(self, model, system_prompt, user_prompt, json_mode=False):
+            if "Generate executor actions now" in user_prompt:
+                assert "python app/main.py" in system_prompt
+                assert 'app.run(host="0.0.0.0", port=5000)' in system_prompt
+                assert "redirect, url_for, or render_template_string" in system_prompt
+                assert "Counter: 0" in system_prompt
+                assert "Increase" in system_prompt
+                assert "RUN.md" in system_prompt
             return """
             [
               {
