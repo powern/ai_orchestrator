@@ -412,6 +412,9 @@ def run_fix_stage(
     previous_error=None,
     previous_raw_output=None,
     emit_started=True,
+    trigger_stage="tester_failed",
+    static_review_output=None,
+    rejected_actions=None,
 ):
     from studio.config.settings import DEFAULT_MODELS
     from studio.core.failure_analysis import FailureAnalyzer
@@ -425,13 +428,16 @@ def run_fix_stage(
             run_id,
             "fix_started",
             "fix",
-            "Fix stage started after tester failure.",
+            f"Fix stage started after {trigger_stage}.",
         )
 
     adapter = LLMAdapter()
     task_description = get_task_description_for_run(run_id)
     bug_report = get_stage_output(run_id, "bug_report") or ""
     executor_output = get_stage_output(run_id, "executor_output") or ""
+    coder_raw_output = get_stage_output(run_id, "coder_raw_output") or ""
+    planner_output = get_stage_output(run_id, "planner_output") or ""
+    architect_output = get_stage_output(run_id, "architect_output") or ""
     analysis = FailureAnalyzer().analyze(workspace_path, tester_result, bug_report)
     repair_plan = RepairPlanner().plan(analysis)
     repair_plan_json = repair_plan.to_json()
@@ -453,6 +459,12 @@ def run_fix_stage(
         bug_report=bug_report,
         executor_output=executor_output,
         repair_plan=repair_plan_json,
+        trigger_stage=trigger_stage,
+        static_review_output=static_review_output,
+        rejected_actions=rejected_actions,
+        coder_raw_output=coder_raw_output,
+        planner_output=planner_output,
+        architect_output=architect_output,
     )
 
     if previous_error is not None:

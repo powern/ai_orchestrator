@@ -1,3 +1,4 @@
+import inspect
 import json
 
 from studio.config.settings import (
@@ -91,7 +92,16 @@ def sanitize_fix_output(run_id, fix_output):
     return result.actions, normalized_output
 
 
-def sanitize_fix_output_or_fail(run_id, fix_output, workspace_path, coder_output, tester_result):
+def sanitize_fix_output_or_fail(
+    run_id,
+    fix_output,
+    workspace_path,
+    coder_output,
+    tester_result,
+    trigger_stage="tester_failed",
+    static_review_output=None,
+    rejected_actions=None,
+):
     current_output = fix_output
 
     for retry_number in range(0, FIX_MAX_OUTPUT_RETRIES + 1):
@@ -134,14 +144,19 @@ def sanitize_fix_output_or_fail(run_id, fix_output, workspace_path, coder_output
                 str(exc),
             )
 
-            fix_result = run_fix_stage(
+            fix_result = _run_fix_stage_with_context(
                 run_id,
                 workspace_path,
                 coder_output,
                 tester_result,
-                previous_error=exc,
-                previous_raw_output=current_output,
-                emit_started=False,
+                {
+                    "previous_error": exc,
+                    "previous_raw_output": current_output,
+                    "emit_started": False,
+                    "trigger_stage": trigger_stage,
+                    "static_review_output": static_review_output,
+                    "rejected_actions": rejected_actions,
+                },
             )
             current_output = fix_result["output"]
             continue
@@ -156,6 +171,30 @@ def sanitize_fix_output_or_fail(run_id, fix_output, workspace_path, coder_output
         return sanitized_fix
 
     return None
+
+
+def _run_fix_stage_with_context(run_id, workspace_path, coder_output, tester_result, context):
+    signature = inspect.signature(run_fix_stage)
+
+    accepts_kwargs = any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    )
+
+    if accepts_kwargs:
+        supported_context = context
+    else:
+        supported_context = {
+            key: value for key, value in context.items() if key in signature.parameters
+        }
+
+    return run_fix_stage(
+        run_id,
+        workspace_path,
+        coder_output,
+        tester_result,
+        **supported_context,
+    )
 
 
 class RunPipeline:
@@ -193,12 +232,29 @@ class RunPipeline:
         )
 
         if not static_review.approved:
+            static_review_output = json.dumps(
+                {
+                    "summary": static_review.summary,
+                    "score": static_review.score,
+                    "approved": static_review.approved,
+                    "findings": static_review.findings,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            save_stage_output(run_id, "executor_output", static_review_output)
+            save_stage_output(
+                run_id,
+                "bug_report",
+                "Static review rejected executor actions.\n"
+                + "\n".join(static_review.findings),
+            )
             add_event(
                 run_id,
                 "static_review_failed",
                 "static_reviewer",
                 "Static review rejected executor actions.",
-                str(static_review.findings),
+                static_review_output,
             )
 
             static_failure = StageTestResult(
@@ -208,11 +264,16 @@ class RunPipeline:
                 stderr="\n".join(static_review.findings),
             )
 
-            fix_result = run_fix_stage(
+            fix_result = _run_fix_stage_with_context(
                 run_id,
                 project["workspace_path"],
                 coder_output,
                 static_failure,
+                {
+                    "trigger_stage": "static_review_failed",
+                    "static_review_output": static_review_output,
+                    "rejected_actions": coder_output,
+                },
             )
 
             sanitized_fix = sanitize_fix_output_or_fail(
@@ -221,6 +282,9 @@ class RunPipeline:
                 project["workspace_path"],
                 coder_output,
                 static_failure,
+                trigger_stage="static_review_failed",
+                static_review_output=static_review_output,
+                rejected_actions=coder_output,
             )
             if sanitized_fix is None:
                 return
@@ -228,7 +292,32 @@ class RunPipeline:
 
             static_review = StaticReviewerAgent().review(actions)
 
+            add_event(
+                run_id,
+                "static_review_completed_after_fix",
+                "static_reviewer",
+                "Static review completed after static review fix.",
+                str(static_review),
+            )
+
             if not static_review.approved:
+                after_fix_output = json.dumps(
+                    {
+                        "summary": static_review.summary,
+                        "score": static_review.score,
+                        "approved": static_review.approved,
+                        "findings": static_review.findings,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                save_stage_output(run_id, "executor_output", after_fix_output)
+                save_stage_output(
+                    run_id,
+                    "bug_report",
+                    "Static review rejected executor actions after fix.\n"
+                    + "\n".join(static_review.findings),
+                )
                 update_run_status(
                     run_id,
                     "failed",
@@ -241,7 +330,7 @@ class RunPipeline:
                     "run_failed",
                     "static_review_failed",
                     "Run failed because static review rejected executor actions after fix.",
-                    str(static_review.findings),
+                    after_fix_output,
                 )
 
                 return

@@ -153,6 +153,12 @@ class FixPromptBuilder:
         bug_report: str | None = None,
         executor_output: str | None = None,
         repair_plan: str | None = None,
+        trigger_stage: str = "tester_failed",
+        static_review_output: str | None = None,
+        rejected_actions: str | None = None,
+        coder_raw_output: str | None = None,
+        planner_output: str | None = None,
+        architect_output: str | None = None,
     ) -> str:
         workspace_context = self._format_workspace_files(workspace_files or [])
         task_context = task_description or "Not available."
@@ -160,9 +166,27 @@ class FixPromptBuilder:
         bug_context = bug_report or "No bug report was available."
         executor_context = executor_output or "No executor output was available."
         repair_context = repair_plan or "No repair plan was available."
+        static_review_context = static_review_output or "No static review output was available."
+        rejected_actions_context = rejected_actions or "No rejected Executor actions were provided."
+        coder_raw_context = coder_raw_output or "No raw coder output was available."
+        planner_context = planner_output or "No planner output was available."
+        architect_context = architect_output or "No architect output was available."
+        static_review_instructions = ""
+
+        if trigger_stage == "static_review_failed":
+            static_review_instructions = """
+Static review repair mode:
+- The workspace may be empty because executor has not run yet.
+- Repair the rejected Executor JSON actions directly.
+- Do not rely only on workspace files.
+- Return a complete corrected Executor JSON action list.
+- Remove placeholder text and unsafe patterns from the rejected actions.
+""".strip()
 
         return f"""
+The generated project failed validation or tests.
 The generated project failed its tests.
+The generated project failed its tests or static review.
 
 You must return ONLY Executor JSON actions that implement the repair plan.
 Do not explain anything.
@@ -171,11 +195,29 @@ Do not use markdown.
 Original task description:
 {task_context}
 
+Planner output:
+{planner_context}
+
+Architect output:
+{architect_context}
+
 Workspace tree:
 {tree_context}
 
+Trigger stage:
+{trigger_stage}
+
 Original coder output:
 {original_coder_output}
+
+Raw coder output:
+{coder_raw_context}
+
+Rejected Executor actions:
+{rejected_actions_context}
+
+Static review output:
+{static_review_context}
 
 Current executor output:
 {executor_context}
@@ -195,6 +237,8 @@ Repair strategy:
 - Modify tests only when the test assertion/import is wrong, requirements changed, or
   production-code repair cannot satisfy the original task.
 - Keep production files and tests consistent; do not hide source bugs by weakening tests.
+
+{static_review_instructions}
 
 Test return code:
 {tester_result.returncode}
