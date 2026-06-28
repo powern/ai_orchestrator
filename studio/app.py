@@ -25,6 +25,25 @@ app = Flask(__name__)
 init_db()
 migrate()
 
+STAGE_OUTPUT_FIELDS = [
+    "planner_output",
+    "architect_output",
+    "coder_raw_output",
+    "coder_sanitizer_error",
+    "coder_output",
+    "executor_output",
+    "tester_output",
+    "bug_report",
+    "failure_analysis",
+    "repair_plan",
+    "fix_raw_output",
+    "fix_sanitizer_error",
+    "fix_output",
+    "tester_output_before_fix",
+    "tester_output_after_fix",
+    "result",
+]
+
 
 def row_to_dict(row):
     return dict(row) if row is not None else None
@@ -171,6 +190,7 @@ def api_run(run_id):
             "project": row_to_dict(project),
             "runtime": row_to_dict(runtime),
             "events": [dict(row) for row in list_events(run_id)],
+            "stage_outputs": {field: run[field] for field in STAGE_OUTPUT_FIELDS},
         }
     )
 

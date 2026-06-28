@@ -5,6 +5,7 @@ from studio.config.settings import (
     FIX_MAX_OUTPUT_RETRIES,
     FIX_MAX_SANITIZE_ATTEMPTS,
 )
+from studio.core.executor_schema import validate_executor_actions
 from studio.core.json_utils import normalize_coder_json
 from studio.core.llm_adapter import LLMAdapter
 from studio.core.stages import (
@@ -75,6 +76,7 @@ def sanitize_fix_output(run_id, fix_output):
         ensure_ascii=False,
         indent=2,
     )
+    validate_executor_actions(result.actions)
 
     save_stage_output(run_id, "fix_output", normalized_output)
 

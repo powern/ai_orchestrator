@@ -1,6 +1,7 @@
 import json
 
 from studio.config.settings import CODER_MAX_OUTPUT_RETRIES, CODER_MAX_SANITIZE_ATTEMPTS
+from studio.core.executor_schema import validate_executor_actions
 from studio.core.llm_adapter import LLMAdapter
 from studio.core.tester_result import StageTestResult
 from studio.events.publisher import publish_run_event
@@ -109,16 +110,20 @@ Generate executor actions now.
 
     current_raw_output = coder_raw_output
     last_error = None
+    invalid_sanitized_actions = None
 
     for retry_number in range(0, CODER_MAX_OUTPUT_RETRIES + 1):
+        invalid_sanitized_actions = None
         try:
             pipeline_result = sanitizer.process(
                 current_raw_output,
                 max_attempts=CODER_MAX_SANITIZE_ATTEMPTS,
             )
+            validate_executor_actions(pipeline_result.actions)
             break
         except Exception as exc:
             last_error = exc
+            invalid_sanitized_actions = getattr(exc, "invalid_actions", None)
             save_stage_output(run_id, "coder_sanitizer_error", str(exc))
 
             if retry_number >= CODER_MAX_OUTPUT_RETRIES:
@@ -160,6 +165,7 @@ Generate executor actions now.
                 model=DEFAULT_MODELS["coder"],
                 previous_raw_output=current_raw_output,
                 error=exc,
+                invalid_sanitized_actions=invalid_sanitized_actions,
             )
     else:
         raise last_error
@@ -194,7 +200,18 @@ Generate executor actions now.
     return normalized_output
 
 
-def ask_coder_retry(adapter, model, previous_raw_output: str, error: Exception) -> str:
+def ask_coder_retry(
+    adapter,
+    model,
+    previous_raw_output: str,
+    error: Exception,
+    invalid_sanitized_actions=None,
+) -> str:
+    invalid_actions_text = (
+        json.dumps(invalid_sanitized_actions, ensure_ascii=False, indent=2)
+        if invalid_sanitized_actions is not None
+        else "not available"
+    )
     system_prompt = """
 You are the Coder Agent of AI Studio.
 
@@ -205,13 +222,27 @@ Do not explain anything.
 
     user_prompt = f"""
 Your previous response could not be parsed.
+It may also have failed Executor Action Schema validation.
 
 Return ONLY Executor JSON.
 Do not use markdown.
 Do not explain.
 
+Strict Executor JSON contract:
+- Root must be a JSON array.
+- Every item must be an object.
+- mkdir requires string fields: action, path.
+- write_file requires string fields: action, path, content.
+- read_file requires string fields: action, path.
+- run requires string fields: action, command.
+- Paths must be relative and must not contain traversal.
+- Do not put objects or arrays inside path, content, or command.
+
 Previous parser error:
 {error}
+
+Invalid sanitized actions:
+{invalid_actions_text}
 
 Previous raw response:
 {previous_raw_output}

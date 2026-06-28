@@ -29,26 +29,29 @@ Active run: <a href="/runs/{{ metrics.active_run.id }}">#{{ metrics.active_run.i
         <th>Name</th>
         <th>Status</th>
         <th>Stage</th>
+        <th>Agent</th>
         <th>Progress</th>
         <th>Last Run</th>
         <th>Indicator</th>
+        <th>Updated</th>
         <th>Created</th>
     </tr>
     {% for project in projects %}
     <tr data-project-id="{{ project.id }}">
         <td>{{ project.id }}</td>
         <td><a href="/projects/{{ project.id }}">{{ project.name }}</a></td>
-        {% set status = project.runtime_status or project.status %}
+        {% set status = project.current_status %}
         <td><span data-project-status class="status status-{{ status }}">{{ status }}</span></td>
-        <td data-project-stage>{{ project.runtime_stage or project.last_run_stage or 'new' }}</td>
+        <td data-project-stage>{{ project.current_stage }}</td>
+        <td data-project-agent>{{ project.current_agent or 'none' }}</td>
         <td data-project-progress-cell>
-            {% set progress = project.runtime_progress or 0 %}
+            {% set progress = project.current_progress or 0 %}
             <div class="progress"><div data-project-progress-bar class="progress-bar" style="width: {{ progress }}%"></div></div>
             <span data-project-progress-text>{{ progress }}%</span>
         </td>
         <td data-project-last-run>
-            {% if project.last_run_id %}
-                <a href="/runs/{{ project.last_run_id }}">#{{ project.last_run_id }}</a>
+            {% if project.latest_run_id %}
+                <a href="/runs/{{ project.latest_run_id }}">#{{ project.latest_run_id }}</a>
             {% else %}
                 <span class="muted">none</span>
             {% endif %}
@@ -56,6 +59,7 @@ Active run: <a href="/runs/{{ metrics.active_run.id }}">#{{ metrics.active_run.i
         <td data-project-indicator>
             {% if status == 'running' %}Running{% elif status == 'completed' %}Completed{% elif status == 'failed' %}Failed{% else %}Idle{% endif %}
         </td>
+        <td data-project-updated>{{ project.current_updated_at or project.updated_at }}</td>
         <td>{{ project.created_at }}</td>
     </tr>
     {% endfor %}
@@ -91,15 +95,25 @@ async function refreshDashboardRuntime() {
             if (!row) {
                 return;
             }
-            const status = project.runtime_status || project.status || "queued";
-            const stage = project.runtime_stage || project.last_run_stage || "new";
-            const progress = project.runtime_progress || 0;
+            const status = project.current_status || project.runtime_status || project.status || "queued";
+            const stage = project.current_stage || project.runtime_stage || project.last_run_stage || "new";
+            const agent = project.current_agent || project.runtime_agent || "none";
+            const progress = project.current_progress || project.runtime_progress || 0;
             const statusNode = row.querySelector("[data-project-status]");
             statusNode.textContent = status;
             statusNode.className = `status status-${status}`;
             row.querySelector("[data-project-stage]").textContent = stage;
+            row.querySelector("[data-project-agent]").textContent = agent;
             row.querySelector("[data-project-progress-bar]").style.width = `${progress}%`;
             row.querySelector("[data-project-progress-text]").textContent = `${progress}%`;
+            const lastRunNode = row.querySelector("[data-project-last-run]");
+            if (project.latest_run_id && lastRunNode) {
+                lastRunNode.innerHTML = `<a href="/runs/${project.latest_run_id}">#${project.latest_run_id}</a>`;
+            }
+            const updatedNode = row.querySelector("[data-project-updated]");
+            if (updatedNode) {
+                updatedNode.textContent = project.current_updated_at || project.updated_at || "";
+            }
             row.querySelector("[data-project-indicator]").textContent =
                 status === "running" ? "Running" :
                 status === "completed" ? "Completed" :

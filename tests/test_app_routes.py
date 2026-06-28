@@ -1,6 +1,7 @@
 from studio.app import app
 from studio.database.db import init_db
 from studio.database.migrations import migrate
+from studio.events.publisher import publish_run_event
 from studio.services.event_service import list_events
 from studio.services.project_service import create_project
 from studio.services.run_service import create_run, create_run_if_not_active, save_stage_output
@@ -54,6 +55,28 @@ def test_dashboard_template_contains_runtime_polling():
     assert 'fetch("/api/runtime")' in html
     assert "data-project-status" in html
     assert "data-project-progress-bar" in html
+    assert "data-project-agent" in html
+    assert "data-project-updated" in html
+
+
+def test_dashboard_uses_latest_runtime_state_instead_of_stale_project_status():
+    init_db()
+    migrate()
+
+    project_id = create_project("Stale Status Project", "Test")
+    run_id = create_run(project_id)
+    publish_run_event(run_id, project_id, "planner_started", "planner", "Planner is running")
+
+    client = app.test_client()
+    response = client.get("/")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert f'data-project-id="{project_id}"' in html
+    assert f'href="/runs/{run_id}">#{run_id}</a>' in html
+    assert "status-running" in html
+    assert "<td data-project-stage>planner</td>" in html
+    assert "<td data-project-agent>planner</td>" in html
 
 
 def test_run_detail_template_exposes_navigation_and_stage_outputs():
@@ -79,6 +102,7 @@ def test_run_detail_template_exposes_navigation_and_stage_outputs():
     save_stage_output(run_id, "fix_raw_output", "raw fix")
     save_stage_output(run_id, "fix_sanitizer_error", "fix error")
     save_stage_output(run_id, "tester_output_after_fix", "tester after")
+    save_stage_output(run_id, "result", "x" * 5000)
 
     client = app.test_client()
     response = client.get(f"/runs/{run_id}")
@@ -90,6 +114,7 @@ def test_run_detail_template_exposes_navigation_and_stage_outputs():
     assert f'href="/runs/{next_run_id}"' in html
     assert 'href="/"' in html
     assert "Project Name: Run Detail Project" in html
+    assert "Current Agent:" in html
     assert "Planner Output" in html
     assert "Architect Output" in html
     assert "Coder Raw Output" in html
@@ -99,4 +124,6 @@ def test_run_detail_template_exposes_navigation_and_stage_outputs():
     assert "Repair Plan" in html
     assert "Fix Raw Output" in html
     assert "Fix Sanitizer Error" in html
+    assert "Final Result" in html
     assert "tester after" in html
+    assert "<pre>" in html

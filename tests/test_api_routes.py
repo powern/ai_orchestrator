@@ -41,6 +41,27 @@ def test_api_project_run_events_and_runtime():
     assert run_response.get_json()["project"]["id"] == project_id
     assert run_response.get_json()["runtime"]["status"] == "completed"
     assert run_response.get_json()["events"][0]["event_type"] == "run_completed"
+    assert run_response.get_json()["stage_outputs"]["result"] is None
     assert events_response.get_json()["events"][0]["event_type"] == "run_completed"
     assert runtime_response.get_json()["metrics"]["total_runs"] >= 1
     assert runtime_response.get_json()["projects"]
+
+
+def test_api_runtime_returns_latest_project_run_state():
+    init_db()
+    migrate()
+
+    project_id = create_project("Runtime Source Project", "Test")
+    run_id = create_run(project_id)
+    publish_run_event(run_id, project_id, "coder_started", "coder", "Coder is running")
+
+    response = app.test_client().get("/api/runtime")
+    payload = response.get_json()
+    project = next(item for item in payload["projects"] if item["id"] == project_id)
+
+    assert response.status_code == 200
+    assert project["latest_run_id"] == run_id
+    assert project["current_status"] == "running"
+    assert project["current_stage"] == "coder"
+    assert project["current_agent"] == "coder"
+    assert project["current_message"] == "Coder is running"

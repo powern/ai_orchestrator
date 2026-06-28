@@ -70,7 +70,8 @@ def list_project_summaries() -> list[dict[str, Any]]:
                 project_runtime.updated_at AS runtime_updated_at,
                 latest_run.id AS last_run_id,
                 latest_run.status AS last_run_status,
-                latest_run.current_stage AS last_run_stage
+                latest_run.current_stage AS last_run_stage,
+                latest_run.updated_at AS last_run_updated_at
             FROM projects
             LEFT JOIN project_runtime ON project_runtime.project_id = projects.id
             LEFT JOIN runs latest_run ON latest_run.id = (
@@ -82,7 +83,7 @@ def list_project_summaries() -> list[dict[str, Any]]:
             ORDER BY projects.id DESC
             """).fetchall()
 
-    return [dict(row) for row in rows]
+    return [_with_dashboard_state(dict(row)) for row in rows]
 
 
 def get_project_summary(project_id: int) -> dict[str, Any] | None:
@@ -97,15 +98,57 @@ def get_project_summary(project_id: int) -> dict[str, Any] | None:
                 project_runtime.progress AS runtime_progress,
                 project_runtime.run_id AS runtime_run_id,
                 project_runtime.message AS runtime_message,
-                project_runtime.updated_at AS runtime_updated_at
+                project_runtime.updated_at AS runtime_updated_at,
+                latest_run.id AS last_run_id,
+                latest_run.status AS last_run_status,
+                latest_run.current_stage AS last_run_stage,
+                latest_run.updated_at AS last_run_updated_at
             FROM projects
             LEFT JOIN project_runtime ON project_runtime.project_id = projects.id
+            LEFT JOIN runs latest_run ON latest_run.id = (
+                SELECT id FROM runs
+                WHERE runs.project_id = projects.id
+                ORDER BY id DESC
+                LIMIT 1
+            )
             WHERE projects.id = ?
             """,
             (project_id,),
         ).fetchone()
 
-    return dict(row) if row is not None else None
+    return _with_dashboard_state(dict(row)) if row is not None else None
+
+
+def _with_dashboard_state(project: dict[str, Any]) -> dict[str, Any]:
+    current_status = (
+        project.get("runtime_status")
+        or project.get("last_run_status")
+        or project.get("status")
+        or "created"
+    )
+    current_stage = project.get("runtime_stage") or project.get("last_run_stage") or "new"
+    latest_run_id = project.get("runtime_run_id") or project.get("last_run_id")
+    progress = project.get("runtime_progress")
+
+    if progress is None:
+        progress = 100 if current_status == "completed" else 0
+
+    project.update(
+        {
+            "latest_run_id": latest_run_id,
+            "current_status": current_status,
+            "current_stage": current_stage,
+            "current_agent": project.get("runtime_agent"),
+            "current_progress": progress,
+            "current_message": project.get("runtime_message") or "",
+            "current_updated_at": (
+                project.get("runtime_updated_at")
+                or project.get("last_run_updated_at")
+                or project.get("updated_at")
+            ),
+        }
+    )
+    return project
 
 
 def get_dashboard_metrics() -> dict[str, Any]:
@@ -148,7 +191,7 @@ def get_dashboard_metrics() -> dict[str, Any]:
     }
 
     for project in projects:
-        status = project.get("runtime_status") or project.get("status") or "queued"
+        status = project.get("current_status") or project.get("status") or "queued"
         if status in counts:
             counts[status] += 1
 

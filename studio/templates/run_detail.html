@@ -18,12 +18,25 @@
     <a class="btn btn-secondary" href="/projects/{{ run.project_id }}">Back to project</a>
 </p>
 
+<p class="run-anchors">
+    <a href="#events">Events</a>
+    <a href="#planner">Planner</a>
+    <a href="#architect">Architect</a>
+    <a href="#coder">Coder</a>
+    <a href="#executor">Executor</a>
+    <a href="#tester">Tester</a>
+    <a href="#analyzer">Analyzer</a>
+    <a href="#repair-plan">Repair Plan</a>
+    <a href="#fix">Fix</a>
+</p>
+
 <section class="run-summary">
     <p>Run ID: {{ run.id }}</p>
     <p>Project ID: {{ run.project_id }}</p>
     <p>Project Name: {{ project.name if project else 'unknown' }}</p>
     <p>Status: <span class="status status-{{ run.status }}">{{ run.status }}</span></p>
     <p>Stage: {{ run.current_stage }}</p>
+    <p>Current Agent: {{ runtime.current_agent if runtime and runtime.current_agent else 'empty' }}</p>
     <p>Progress: {{ runtime.progress if runtime else 'empty' }}%</p>
     <p>Message: {{ runtime.message if runtime and runtime.message else 'empty' }}</p>
     <p>Created: {{ run.created_at }}</p>
@@ -31,32 +44,32 @@
 </section>
 
 {% set output_sections = [
-    ('Planner Output', run.planner_output),
-    ('Architect Output', run.architect_output),
-    ('Coder Output', run.coder_output),
-    ('Coder Raw Output', run.coder_raw_output),
-    ('Coder Sanitizer Error', run.coder_sanitizer_error),
-    ('Executor Output', run.executor_output),
-    ('Tester Output', run.tester_output),
-    ('Tester Output Before Fix', run.tester_output_before_fix),
-    ('Bug Report', run.bug_report),
-    ('Failure Analysis', run.failure_analysis),
-    ('Repair Plan', run.repair_plan),
-    ('Fix Output', run.fix_output),
-    ('Fix Raw Output', run.fix_raw_output),
-    ('Fix Sanitizer Error', run.fix_sanitizer_error),
-    ('Tester Output After Fix', run.tester_output_after_fix),
-    ('Result', run.result)
+    ('planner', 'Planner Output', run.planner_output),
+    ('architect', 'Architect Output', run.architect_output),
+    ('coder', 'Coder Raw Output', run.coder_raw_output),
+    ('coder-sanitizer-error', 'Coder Sanitizer Error', run.coder_sanitizer_error),
+    ('coder-output', 'Coder Output', run.coder_output),
+    ('executor', 'Executor Output', run.executor_output),
+    ('tester', 'Tester Output', run.tester_output),
+    ('bug-report', 'Bug Report', run.bug_report),
+    ('analyzer', 'Failure Analysis', run.failure_analysis),
+    ('repair-plan', 'Repair Plan', run.repair_plan),
+    ('fix', 'Fix Raw Output', run.fix_raw_output),
+    ('fix-sanitizer-error', 'Fix Sanitizer Error', run.fix_sanitizer_error),
+    ('fix-output', 'Fix Output', run.fix_output),
+    ('tester-before-fix', 'Tester Output Before Fix', run.tester_output_before_fix),
+    ('tester-after-fix', 'Tester Output After Fix', run.tester_output_after_fix),
+    ('final-result', 'Final Result', run.result)
 ] %}
 
-{% for title, value in output_sections %}
-<details class="stage-output" open>
+{% for section_id, title, value in output_sections %}
+<details id="{{ section_id }}" class="stage-output" open>
     <summary>{{ title }}</summary>
     <pre>{{ value or 'empty' }}</pre>
 </details>
 {% endfor %}
 
-<h3>Events</h3>
+<h3 id="events">Events</h3>
 
 
 {% if events %}
