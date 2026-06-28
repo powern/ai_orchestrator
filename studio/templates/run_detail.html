@@ -13,6 +13,12 @@
 <h3>Planner Output</h3>
 <pre>{{ run.planner_output or 'No planner output yet.' }}</pre>
 
+<h3>Raw Coder Output</h3>
+<pre>{{ run.coder_raw_output or 'No raw coder output yet.' }}</pre>
+
+<h3>Coder Sanitizer Error</h3>
+<pre>{{ run.coder_sanitizer_error or 'No coder sanitizer error.' }}</pre>
+
 <h3>Coder Output</h3>
 <pre>{{ run.coder_output or 'No coder output yet.' }}</pre>
 
@@ -21,6 +27,12 @@
 
 <h3>Fix Actions</h3>
 <pre>{{ run.fix_output or 'No fix output yet.' }}</pre>
+
+<h3>Raw Fix Output</h3>
+<pre>{{ run.fix_raw_output or 'No raw fix output yet.' }}</pre>
+
+<h3>Fix Sanitizer Error</h3>
+<pre>{{ run.fix_sanitizer_error or 'No fix sanitizer error.' }}</pre>
 
 <h3>Second Tester Output</h3>
 <pre>{{ run.tester_output_after_fix or 'No post-fix tester output yet.' }}</pre>
@@ -39,6 +51,7 @@
         <th>Type</th>
         <th>Stage</th>
         <th>Message</th>
+        <th>Payload</th>
     </tr>
     {% for event in events %}
     <tr>
@@ -47,6 +60,7 @@
         <td>{{ event.event_type }}</td>
         <td>{{ event.stage or '' }}</td>
         <td class="event-message">{{ event.message or '' }}</td>
+        <td><pre>{{ event.payload or '' }}</pre></td>
     </tr>
     {% endfor %}
 </table>

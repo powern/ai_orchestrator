@@ -1,4 +1,3 @@
-import ast
 import json
 
 from studio.coder.normalizer import normalize
@@ -8,7 +7,6 @@ from studio.coder.validator import validate
 
 
 class CoderPipeline:
-
     def retry_with(self, retry_fn, original_output: str, error: Exception):
         return retry_fn(original_output, error)
 
@@ -20,10 +18,7 @@ class CoderPipeline:
             repaired = repair(current_output)
 
             try:
-                try:
-                    actions = json.loads(repaired)
-                except json.JSONDecodeError:
-                    actions = ast.literal_eval(repaired)
+                actions = json.loads(repaired)
 
                 if not isinstance(actions, list):
                     raise ValueError("Coder JSON root must be a list")

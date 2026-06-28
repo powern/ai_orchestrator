@@ -3,7 +3,6 @@ from studio.database.db import get_connection
 
 def migrate():
     with get_connection() as conn:
-
         conn.execute("""
         CREATE TABLE IF NOT EXISTS run_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,8 +29,20 @@ def migrate():
         if "bug_report" not in columns:
             conn.execute("ALTER TABLE runs ADD COLUMN bug_report TEXT")
 
+        if "coder_raw_output" not in columns:
+            conn.execute("ALTER TABLE runs ADD COLUMN coder_raw_output TEXT")
+
+        if "coder_sanitizer_error" not in columns:
+            conn.execute("ALTER TABLE runs ADD COLUMN coder_sanitizer_error TEXT")
+
+        if "fix_raw_output" not in columns:
+            conn.execute("ALTER TABLE runs ADD COLUMN fix_raw_output TEXT")
+
         if "fix_output" not in columns:
             conn.execute("ALTER TABLE runs ADD COLUMN fix_output TEXT")
+
+        if "fix_sanitizer_error" not in columns:
+            conn.execute("ALTER TABLE runs ADD COLUMN fix_sanitizer_error TEXT")
 
         if "tester_output_before_fix" not in columns:
             conn.execute("ALTER TABLE runs ADD COLUMN tester_output_before_fix TEXT")

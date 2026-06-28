@@ -28,6 +28,7 @@ OLLAMA_TEMPERATURE = 0.2
 
 SCHEDULER_POLL_INTERVAL_SECONDS = 5
 CODER_MAX_SANITIZE_ATTEMPTS = 2
+CODER_MAX_OUTPUT_RETRIES = 3
 FIX_MAX_SANITIZE_ATTEMPTS = 2
 
 STAGE_PROGRESS = {
@@ -35,7 +36,9 @@ STAGE_PROGRESS = {
     "planner": 10,
     "architect": 20,
     "coder": 35,
+    "coder_failed": 35,
     "static_reviewer": 50,
+    "fix_failed": 50,
     "executor": 65,
     "tester": 80,
     "reviewer": 90,

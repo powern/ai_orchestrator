@@ -1,6 +1,6 @@
 import json
 
-from studio.config.settings import CODER_MAX_SANITIZE_ATTEMPTS
+from studio.config.settings import CODER_MAX_OUTPUT_RETRIES, CODER_MAX_SANITIZE_ATTEMPTS
 from studio.core.llm_adapter import LLMAdapter
 from studio.core.tester_result import StageTestResult
 from studio.events.publisher import publish_run_event
@@ -28,7 +28,7 @@ def run_architect_placeholder(run_id, planner_output):
         "Architect placeholder started.",
     )
 
-    architect_output = "ARCHITECT PLACEHOLDER\n\n" "Input from planner:\n" f"{planner_output}"
+    architect_output = f"ARCHITECT PLACEHOLDER\n\nInput from planner:\n{planner_output}"
 
     save_stage_output(run_id, "architect_output", architect_output)
 
@@ -94,47 +94,75 @@ Generate executor actions now.
 """
 
     adapter = LLMAdapter()
-    coder_output = adapter.ask(
+    coder_raw_output = adapter.ask(
         model=DEFAULT_MODELS["coder"],
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         json_mode=True,
     )
-
-    def retry_fn(original_output, error):
-        add_event(
-            run_id,
-            "coder_retry_started",
-            "coder",
-            f"Coder retry started after validation error: {error}",
-            original_output,
-        )
-
-        retry_output = adapter.ask_retry(
-            model=DEFAULT_MODELS["coder"],
-            original_output=original_output,
-            error=error,
-        )
-
-        add_event(
-            run_id,
-            "coder_retry_completed",
-            "coder",
-            "Coder retry completed.",
-            retry_output,
-        )
-
-        return retry_output
+    save_stage_output(run_id, "coder_raw_output", coder_raw_output)
 
     sanitizer = ActionSanitizerAgent(
         adapter=adapter,
         model=DEFAULT_MODELS["coder"],
     )
 
-    pipeline_result = sanitizer.process(
-        coder_output,
-        max_attempts=CODER_MAX_SANITIZE_ATTEMPTS,
-    )
+    current_raw_output = coder_raw_output
+    last_error = None
+
+    for retry_number in range(0, CODER_MAX_OUTPUT_RETRIES + 1):
+        try:
+            pipeline_result = sanitizer.process(
+                current_raw_output,
+                max_attempts=CODER_MAX_SANITIZE_ATTEMPTS,
+            )
+            break
+        except Exception as exc:
+            last_error = exc
+            save_stage_output(run_id, "coder_sanitizer_error", str(exc))
+
+            if retry_number >= CODER_MAX_OUTPUT_RETRIES:
+                update_run_status(
+                    run_id,
+                    "failed",
+                    "coder_failed",
+                    f"Coder output could not be sanitized: {exc}",
+                )
+
+                add_event(
+                    run_id,
+                    "coder_failed",
+                    "coder_failed",
+                    "Coder output could not be sanitized after retries.",
+                    str(exc),
+                )
+
+                add_event(
+                    run_id,
+                    "run_failed",
+                    "coder_failed",
+                    "Run failed because coder output was invalid after retries.",
+                    str(exc),
+                )
+
+                return None
+
+            add_event(
+                run_id,
+                "coder_retry",
+                "coder",
+                f"Coder retry #{retry_number + 1} after sanitizer error.",
+                str(exc),
+            )
+
+            current_raw_output = ask_coder_retry(
+                adapter=adapter,
+                model=DEFAULT_MODELS["coder"],
+                previous_raw_output=current_raw_output,
+                error=exc,
+            )
+    else:
+        raise last_error
 
     normalized_output = json.dumps(
         pipeline_result.program.to_dicts(),
@@ -164,6 +192,37 @@ Generate executor actions now.
     )
 
     return normalized_output
+
+
+def ask_coder_retry(adapter, model, previous_raw_output: str, error: Exception) -> str:
+    system_prompt = """
+You are the Coder Agent of AI Studio.
+
+Return ONLY valid Executor JSON.
+Do not use markdown.
+Do not explain anything.
+"""
+
+    user_prompt = f"""
+Your previous response could not be parsed.
+
+Return ONLY Executor JSON.
+Do not use markdown.
+Do not explain.
+
+Previous parser error:
+{error}
+
+Previous raw response:
+{previous_raw_output}
+"""
+
+    return adapter.ask(
+        model=model,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        json_mode=True,
+    )
 
 
 def run_executor_stage(run_id, workspace_path, coder_output):
@@ -293,7 +352,7 @@ def run_fix_stage(run_id, workspace_path, coder_output, tester_result):
         json_mode=True,
     )
 
-    save_stage_output(run_id, "fix_output", fix_output)
+    save_stage_output(run_id, "fix_raw_output", fix_output)
 
     add_event(
         run_id,

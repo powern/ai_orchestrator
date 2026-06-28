@@ -1,3 +1,5 @@
+import json
+
 from studio.core import stages
 from studio.database.db import init_db
 from studio.database.migrations import migrate
@@ -11,35 +13,46 @@ from studio.services.runtime_service import get_project_runtime
 class FakeLLMAdapter:
     def ask(self, model, system_prompt, user_prompt, json_mode=False):
         if json_mode:
-            return """
-            [
-              {
-                "action": "mkdir",
-                "path": "app"
-              },
-              {
-                "action": "mkdir",
-                "path": "tests"
-              },
-              {
-                "action": "write_file",
-                "path": "app/__init__.py",
-                "content": ""
-              },
-              {
-                "action": "write_file",
-                "path": "app/main.py",
-                "content": "def main():\\n    return 'hello'\\n"
-              },
-              {
-                "action": "write_file",
-                "path": "tests/test_main.py",
-                "content": "from app.main import main\\n\\ndef test_main():\\n"
-                           "    assert main() == 'hello'\\n"
-              }
-            ]
-            """
+            return json.dumps(
+                [
+                    {
+                        "action": "mkdir",
+                        "path": "app",
+                    },
+                    {
+                        "action": "mkdir",
+                        "path": "tests",
+                    },
+                    {
+                        "action": "write_file",
+                        "path": "app/__init__.py",
+                        "content": "",
+                    },
+                    {
+                        "action": "write_file",
+                        "path": "app/main.py",
+                        "content": "def main():\n    return 'hello'\n",
+                    },
+                    {
+                        "action": "write_file",
+                        "path": "tests/test_main.py",
+                        "content": (
+                            "from app.main import main\n\n"
+                            "def test_main():\n"
+                            "    assert main() == 'hello'\n"
+                        ),
+                    },
+                ]
+            )
         return "1. Create Flask app\n2. Add one page\n3. Add tests"
+
+
+class MalformedCoderLLMAdapter:
+    def ask(self, model, system_prompt, user_prompt, json_mode=False):
+        if not json_mode:
+            return "Files:\n- app/main.py\n- tests/test_main.py"
+
+        return '[{"action":"write_file","path":"app/main.py","content":"unterminated}'
 
 
 def test_scheduler_processes_next_queued_run(monkeypatch):
@@ -83,3 +96,41 @@ def test_scheduler_processes_next_queued_run(monkeypatch):
     assert "coder_completed" in event_types
     assert "executor_started" in event_types
     assert "tester_completed" in event_types
+
+
+def test_scheduler_keeps_malformed_coder_output_inside_coder_stage(monkeypatch):
+    init_db()
+    migrate()
+
+    monkeypatch.setattr(worker, "LLMAdapter", lambda: FakeLLMAdapter())
+    monkeypatch.setattr(stages, "LLMAdapter", MalformedCoderLLMAdapter)
+
+    project_id = create_project(
+        "Self Healing GUI Test 2",
+        "Generate a larger project that may produce malformed coder output.",
+    )
+    create_run(project_id)
+
+    expected_run = get_next_queued_run()
+    expected_run_id = expected_run["id"]
+    expected_project_id = expected_run["project_id"]
+
+    processed = worker.process_one_run()
+
+    run = get_run(expected_run_id)
+    events = list_events(expected_run_id)
+    event_types = [event["event_type"] for event in events]
+
+    assert processed is True
+    assert run["status"] == "failed"
+    assert run["current_stage"] == "coder_failed"
+    assert run["coder_raw_output"]
+    assert run["coder_sanitizer_error"]
+    assert get_project(expected_project_id)["status"] == "failed"
+    assert get_project_runtime(expected_project_id)["status"] == "failed"
+    assert event_types.count("coder_retry") == 3
+    assert "coder_failed" in event_types
+    assert "run_failed" in event_types
+    assert "pipeline_failed" not in event_types
+    assert "executor_started" not in event_types
+    assert "tester_started" not in event_types

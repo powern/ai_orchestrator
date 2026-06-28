@@ -57,10 +57,14 @@ def sanitize_fix_output(run_id, fix_output):
         model=DEFAULT_MODELS["coder"],
     )
 
-    result = sanitizer.process(
-        fix_output,
-        max_attempts=FIX_MAX_SANITIZE_ATTEMPTS,
-    )
+    try:
+        result = sanitizer.process(
+            fix_output,
+            max_attempts=FIX_MAX_SANITIZE_ATTEMPTS,
+        )
+    except Exception as exc:
+        save_stage_output(run_id, "fix_sanitizer_error", str(exc))
+        raise
 
     normalized_output = json.dumps(
         result.actions,
@@ -81,8 +85,37 @@ def sanitize_fix_output(run_id, fix_output):
     return result.actions, normalized_output
 
 
-class RunPipeline:
+def sanitize_fix_output_or_fail(run_id, fix_output):
+    try:
+        return sanitize_fix_output(run_id, fix_output)
+    except Exception as exc:
+        update_run_status(
+            run_id,
+            "failed",
+            "fix_failed",
+            f"Fix output could not be sanitized: {exc}",
+        )
 
+        add_event(
+            run_id,
+            "fix_failed",
+            "fix_failed",
+            "Fix output could not be sanitized.",
+            str(exc),
+        )
+
+        add_event(
+            run_id,
+            "run_failed",
+            "fix_failed",
+            "Run failed because fix output was invalid.",
+            str(exc),
+        )
+
+        return None
+
+
+class RunPipeline:
     def __init__(self, planner_fn):
         self.planner_fn = planner_fn
 
@@ -100,6 +133,9 @@ class RunPipeline:
             planner_output,
             architect_output,
         )
+
+        if coder_output is None:
+            return
 
         static_review = StaticReviewerAgent().review(
             normalize_coder_json(coder_output),
@@ -136,10 +172,13 @@ class RunPipeline:
                 static_failure,
             )
 
-            actions, coder_output = sanitize_fix_output(
+            sanitized_fix = sanitize_fix_output_or_fail(
                 run_id,
                 fix_result["output"],
             )
+            if sanitized_fix is None:
+                return
+            actions, coder_output = sanitized_fix
 
             static_review = StaticReviewerAgent().review(actions)
 
@@ -202,10 +241,13 @@ class RunPipeline:
             tester_result,
         )
 
-        actions, coder_output = sanitize_fix_output(
+        sanitized_fix = sanitize_fix_output_or_fail(
             run_id,
             fix_result["output"],
         )
+        if sanitized_fix is None:
+            return
+        actions, coder_output = sanitized_fix
 
         static_review = StaticReviewerAgent().review(actions)
 
