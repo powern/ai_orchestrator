@@ -6,6 +6,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from studio.contracts.execution import ProjectExecutionContract, infer_execution_contract
+
 
 @dataclass
 class RuntimeReadinessReport:
@@ -18,6 +20,7 @@ class RuntimeReadinessReport:
     manual_run_ready: bool
     entrypoint_command: str | None = None
     expected_url: str | None = None
+    project_execution_contract: dict | None = None
     findings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -31,6 +34,7 @@ class RuntimeReadinessReport:
             "manual_run_ready": self.manual_run_ready,
             "entrypoint_command": self.entrypoint_command,
             "expected_url": self.expected_url,
+            "project_execution_contract": self.project_execution_contract,
             "findings": self.findings,
         }
 
@@ -39,8 +43,19 @@ class RuntimeReadinessReport:
 
 
 class RuntimeReadinessValidator:
-    def validate(self, workspace_path: str | Path) -> RuntimeReadinessReport:
+    def validate(
+        self,
+        workspace_path: str | Path,
+        execution_contract: ProjectExecutionContract | dict | None = None,
+    ) -> RuntimeReadinessReport:
         workspace = Path(workspace_path)
+        contract = (
+            ProjectExecutionContract.from_dict(execution_contract)
+            if isinstance(execution_contract, dict)
+            else execution_contract
+        )
+        if contract is None:
+            contract = infer_execution_contract(workspace_path=workspace)
         findings: list[str] = []
         requirements = self._read_requirements(workspace)
         python_files = list(self._python_files(workspace))
@@ -51,15 +66,29 @@ class RuntimeReadinessValidator:
         findings.extend(dependency_findings)
 
         entrypoint_status = "passed"
-        entrypoint_command = None
-        if entrypoint is None and (is_web_app or python_files):
+        entrypoint_command = contract.run.command
+        if entrypoint_command:
+            command_path = self._command_path(entrypoint_command)
+            if command_path and not (workspace / command_path).exists():
+                entrypoint_status = "failed"
+                findings.append(
+                    f"Runtime entrypoint command points to missing file: {command_path}."
+                )
+        elif entrypoint is None and (is_web_app or python_files):
             entrypoint_status = "failed"
             findings.append("Runtime entrypoint is missing.")
         elif entrypoint is not None:
             entrypoint_command = f"python {entrypoint.relative_to(workspace).as_posix()}"
 
         smoke_status = "skipped"
-        if entrypoint is not None:
+        if entrypoint_command:
+            smoke_status = self._runtime_smoke_command(
+                workspace,
+                entrypoint_command,
+                contract.run.working_directory,
+                findings,
+            )
+        elif entrypoint is not None:
             smoke_status = self._runtime_smoke(workspace, entrypoint, findings)
 
         behavior_status = self._behavior_tests(workspace, is_web_app, findings)
@@ -79,6 +108,7 @@ class RuntimeReadinessValidator:
             manual_run_ready=manual_run_ready,
             entrypoint_command=entrypoint_command,
             expected_url="http://127.0.0.1:5000/" if is_web_app else None,
+            project_execution_contract=contract.to_dict(),
             findings=findings,
         )
 
@@ -175,6 +205,50 @@ class RuntimeReadinessValidator:
 
         return "passed"
 
+    def _runtime_smoke_command(
+        self,
+        workspace: Path,
+        command: str,
+        working_directory: str,
+        findings: list[str],
+    ) -> str:
+        if not command.startswith("python "):
+            return "skipped"
+        args = [sys.executable, *command.removeprefix("python ").split()]
+
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(workspace)
+        cwd = (workspace / working_directory).resolve()
+        try:
+            cwd.relative_to(workspace.resolve())
+        except ValueError:
+            findings.append("Runtime smoke working directory is outside workspace.")
+            return "failed"
+        if not cwd.exists():
+            findings.append(f"Runtime smoke working directory is missing: {working_directory}.")
+            return "failed"
+
+        try:
+            result = subprocess.run(
+                args,
+                cwd=cwd,
+                env=env,
+                text=True,
+                capture_output=True,
+                timeout=2,
+            )
+        except subprocess.TimeoutExpired:
+            return "passed"
+
+        if result.returncode != 0:
+            findings.append(
+                "Runtime smoke failed: "
+                + (result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}")
+            )
+            return "failed"
+
+        return "passed"
+
     def _behavior_tests(self, workspace: Path, is_web_app: bool, findings: list[str]) -> str:
         if not is_web_app:
             return "skipped"
@@ -220,6 +294,13 @@ class RuntimeReadinessValidator:
             if "Flask(" in content or "@app.route" in content:
                 return True
         return False
+
+    def _command_path(self, command: str) -> str | None:
+        for part in command.split()[1:]:
+            cleaned = part.strip("'\"")
+            if cleaned.endswith(".py"):
+                return cleaned.replace("\\", "/")
+        return None
 
     def _version_lt(self, version: str, expected: str) -> bool:
         return self._version_tuple(version) < self._version_tuple(expected)

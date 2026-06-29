@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from studio.contracts.execution import infer_execution_contract
 from studio.database.db import get_connection
 from studio.events.publisher import publish_run_event
 
@@ -94,6 +95,7 @@ def build_handoff(
     task = context.get("task", {})
     project = context.get("project", {})
     project_graph = project.get("project_graph", {})
+    execution_contract = _execution_contract_for_context(project, summary)
     graph_summary = project_graph.get("summary", {})
     assumptions = {
         "project_types": graph_summary.get("project_types", []),
@@ -106,6 +108,7 @@ def build_handoff(
         summary,
         project_graph,
         producer,
+        execution_contract,
     )
     decision_summary = _decision_summary(summary)
     effective_risks = known_risks or []
@@ -298,11 +301,28 @@ def _compact_contract(
     summary: str,
     project_graph: dict[str, Any],
     producer: str,
+    execution_contract: dict[str, Any],
 ) -> dict[str, Any]:
     compact = dict(contract)
     compact.update(_contract_from_graph(project_graph))
     compact.update(_contract_from_executor_actions(summary, producer))
+    if execution_contract:
+        compact["project_execution_contract"] = execution_contract
+        compact.update(_execution_contract_decision_fields(execution_contract))
     return {key: value for key, value in compact.items() if value not in (None, [], {}, "")}
+
+
+def _execution_contract_for_context(project: dict[str, Any], summary: str) -> dict[str, Any]:
+    existing = project.get("project_execution_contract") or project.get("execution_contract")
+    if existing:
+        return existing
+    actions = _executor_actions(summary)
+    return infer_execution_contract(
+        workspace_path=project.get("workspace_path") or None,
+        workspace_state=project.get("workspace_state") or {},
+        project_graph=project.get("project_graph") or {},
+        executor_actions=actions,
+    ).to_dict()
 
 
 def _contract_from_graph(project_graph: dict[str, Any]) -> dict[str, Any]:
@@ -332,10 +352,7 @@ def _contract_from_graph(project_graph: dict[str, Any]) -> dict[str, Any]:
 
 
 def _contract_from_executor_actions(summary: str, producer: str) -> dict[str, Any]:
-    try:
-        actions = json.loads(summary)
-    except (TypeError, json.JSONDecodeError):
-        return {}
+    actions = _executor_actions(summary)
     if not isinstance(actions, list):
         return {}
     write_paths = [
@@ -364,6 +381,40 @@ def _contract_from_executor_actions(summary: str, producer: str) -> dict[str, An
         or ("pytest -q" if any(path.startswith("tests/") for path in write_paths) else None),
     }
     return contract
+
+
+def _executor_actions(summary: str) -> list[dict[str, Any]]:
+    try:
+        actions = json.loads(summary)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(actions, list):
+        return []
+    return [action for action in actions if isinstance(action, dict)]
+
+
+def _execution_contract_decision_fields(contract: dict[str, Any]) -> dict[str, Any]:
+    build = contract.get("build") or {}
+    run = contract.get("run") or {}
+    test = contract.get("test") or {}
+    module = contract.get("module_strategy") or {}
+    artifacts = contract.get("artifacts") or {}
+    fields = {
+        "language": contract.get("language"),
+        "project_root": contract.get("project_root"),
+        "source_roots": contract.get("source_roots"),
+        "test_roots": contract.get("test_roots"),
+        "build_command": build.get("command"),
+        "run_command": run.get("command"),
+        "test_command": test.get("command"),
+        "module_strategy": module.get("type"),
+        "import_root": module.get("import_root"),
+        "namespace_root": module.get("namespace_root"),
+        "include_roots": module.get("include_roots"),
+        "expected_files": artifacts.get("expected_files"),
+        "expected_directories": artifacts.get("expected_directories"),
+    }
+    return {key: value for key, value in fields.items() if value not in (None, [], {}, "")}
 
 
 def _assumptions_from_graph(project_graph: dict[str, Any]) -> dict[str, Any]:

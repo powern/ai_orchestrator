@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass, field
+from typing import Any
 
 from studio.core.failure_analysis import FailureAnalysis
 
@@ -15,6 +16,7 @@ class RepairPlan:
         "Modify tests only when the tests are wrong, requirements changed, "
         "or production-code repair cannot address the failure."
     )
+    project_execution_contract: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -24,6 +26,7 @@ class RepairPlan:
             "secondary_targets": self.secondary_targets,
             "reason": self.reason,
             "test_modification_policy": self.test_modification_policy,
+            "project_execution_contract": self.project_execution_contract,
         }
 
     def to_json(self) -> str:
@@ -31,7 +34,12 @@ class RepairPlan:
 
 
 class RepairPlanner:
-    def plan(self, analysis: FailureAnalysis) -> RepairPlan:
+    def plan(
+        self,
+        analysis: FailureAnalysis,
+        execution_contract: dict[str, Any] | None = None,
+    ) -> RepairPlan:
+        contract = execution_contract or analysis.execution_contract
         root_cause = analysis.root_cause or "unknown"
         repair_targets = []
         secondary_targets = []
@@ -59,12 +67,19 @@ class RepairPlanner:
         ):
             repair_targets.insert(0, primary_target)
 
+        if analysis.failure_class == "InvalidExecutionContract":
+            contract_targets = self._contract_targets(contract)
+            for target in contract_targets:
+                if target not in repair_targets:
+                    repair_targets.append(target)
+
         return RepairPlan(
             root_cause=root_cause,
             primary_target=primary_target,
             repair_targets=repair_targets,
             secondary_targets=secondary_targets,
             reason=analysis.reason,
+            project_execution_contract=contract,
         )
 
     def _looks_missing_module_placeholder(self, path: str) -> bool:
@@ -87,3 +102,16 @@ class RepairPlanner:
             return root_cause
 
         return secondary_targets[0] if secondary_targets else None
+
+    def _contract_targets(self, contract: dict[str, Any]) -> list[str]:
+        targets = []
+        module = contract.get("module_strategy") or {}
+        import_root = module.get("import_root")
+        if import_root and "-" in import_root:
+            root_path = import_root.replace(".", "/").split("/", 1)[0]
+            targets.append(root_path)
+        run_command = (contract.get("run") or {}).get("command")
+        if run_command:
+            parts = [part.strip("'\"") for part in run_command.split()]
+            targets.extend(part for part in parts if part.endswith(".py"))
+        return targets

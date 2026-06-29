@@ -3,6 +3,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
 
+from studio.contracts.execution import infer_execution_contract
 from studio.contracts.handoff import load_handoff_history, load_latest_handoff
 from studio.core.workspace_observer import WorkspaceObserver
 from studio.services.engineering_service import get_latest_engineering_assessment
@@ -54,6 +55,11 @@ def build_agent_context(
     resolved_workspace = workspace_path or project.get("workspace_path") or ""
     workspace_state = _workspace_state(resolved_workspace)
     project_graph = workspace_state.get("project_graph", {})
+    execution_contract = workspace_state.get("execution_contract") or infer_execution_contract(
+        workspace_path=resolved_workspace or None,
+        workspace_state=workspace_state,
+        project_graph=project_graph,
+    ).to_dict()
     engineering_assessment = get_latest_engineering_assessment(run_id) if run else None
 
     task = {
@@ -91,6 +97,8 @@ def build_agent_context(
             "workspace_path": resolved_workspace,
             "project_graph": project_graph,
             "workspace_state": workspace_state,
+            "execution_contract": execution_contract,
+            "project_execution_contract": execution_contract,
         },
         pipeline={
             "current_stage": current_stage,

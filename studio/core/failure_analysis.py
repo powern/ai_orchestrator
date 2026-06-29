@@ -1,7 +1,9 @@
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
+from studio.contracts.execution import validate_execution_contract
 from studio.core.fix_prompt import FixWorkspaceContextBuilder
 from studio.core.tester_result import StageTestResult
 
@@ -30,6 +32,7 @@ class FailureAnalysis:
     missing_module: str | None = None
     workspace_tree: str = ""
     dependency_graph: dict[str, list[str]] = field(default_factory=dict)
+    execution_contract: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -45,6 +48,7 @@ class FailureAnalysis:
             "missing_module": self.missing_module,
             "workspace_tree": self.workspace_tree,
             "dependency_graph": self.dependency_graph,
+            "execution_contract": self.execution_contract,
         }
 
 
@@ -54,11 +58,18 @@ class FailureAnalyzer:
         workspace_path: str | Path,
         tester_result: StageTestResult,
         bug_report: str = "",
+        execution_contract: dict[str, Any] | None = None,
     ) -> FailureAnalysis:
         workspace = Path(workspace_path)
         output = f"{tester_result.stdout}\n{tester_result.stderr}\n{bug_report}"
         exception_type, message = self._exception(output)
-        failure_class = self._failure_class(exception_type, message)
+        contract_violations = validate_execution_contract(execution_contract, workspace)
+        failure_class = self._failure_class(
+            exception_type,
+            message,
+            execution_contract or {},
+            contract_violations,
+        )
         missing_module = self._missing_module(output)
         import_error_module = self._import_error_module(message)
         attribute_module = self._attribute_error_module(message)
@@ -100,6 +111,7 @@ class FailureAnalyzer:
             missing_module=missing_module,
             workspace_tree=FixWorkspaceContextBuilder().build_tree(workspace),
             dependency_graph=dependency_graph,
+            execution_contract=execution_contract or {},
         )
 
     def _exception(self, output: str) -> tuple[str, str]:
@@ -122,14 +134,29 @@ class FailureAnalyzer:
         match = ATTRIBUTE_MODULE_PATTERN.search(message)
         return match.group(1) if match else None
 
-    def _failure_class(self, exception_type: str, message: str) -> str:
+    def _failure_class(
+        self,
+        exception_type: str,
+        message: str,
+        execution_contract: dict[str, Any],
+        contract_violations,
+    ) -> str:
+        if any(
+            violation.code in {"invalid_python_import_root", "missing_python_import_root"}
+            for violation in contract_violations
+        ):
+            return "InvalidExecutionContract"
+
         if exception_type == "ModuleNotFoundError":
+            module_strategy = (execution_contract.get("module_strategy") or {}).get("type")
+            if module_strategy and module_strategy not in {"none", "unknown"}:
+                return "ImportOrModuleResolutionFailure"
             return "MissingModule"
 
         if exception_type == "ImportError":
             if IMPORT_NAME_PATTERN.search(message):
                 return "MissingExport"
-            return "ImportFailure"
+            return "ImportOrModuleResolutionFailure"
 
         if exception_type == "AttributeError":
             if ATTRIBUTE_MODULE_PATTERN.search(message):
@@ -420,6 +447,16 @@ class FailureAnalyzer:
             return "Syntax error in imported source file."
 
         if missing_module:
+            if failure_class == "InvalidExecutionContract":
+                return (
+                    "Project Execution Contract contains invalid module semantics for "
+                    f"missing module '{missing_module}'."
+                )
+            if failure_class == "ImportOrModuleResolutionFailure":
+                return (
+                    "Import or module resolution failed relative to the Project Execution "
+                    f"Contract for missing module '{missing_module}'."
+                )
             if missing_module.startswith("app."):
                 return f"Missing dependency file for module '{missing_module}'."
             missing_path = workspace / Path(*missing_module.split(".")).with_suffix(".py")

@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from studio.contracts.execution import infer_execution_contract
 from studio.core.project_knowledge import ProjectKnowledgeGraphBuilder
 
 EXCLUDED_DIRS = {
@@ -60,6 +61,7 @@ class WorkspaceObserver:
                 "project_type_hints": [],
                 "validation_artifacts": [],
                 "project_graph": empty_graph,
+                "execution_contract": infer_execution_contract(project_graph=empty_graph).to_dict(),
             }
 
         tree: list[str] = []
@@ -105,6 +107,17 @@ class WorkspaceObserver:
             metadata_files=metadata_files[:MAX_SUMMARY_FILES],
             validation_artifacts=validation_artifacts[:MAX_SUMMARY_FILES],
         )
+        execution_contract = infer_execution_contract(
+            workspace_path=workspace,
+            workspace_state={
+                "source_files": {"files": source_files[:MAX_SUMMARY_FILES]},
+                "tests": {"files": test_files[:MAX_SUMMARY_FILES]},
+                "dependency_files": dependency_files[:MAX_SUMMARY_FILES],
+                "project_type_hints": project_graph["summary"]["project_types"],
+            },
+            project_graph=project_graph,
+        ).to_dict()
+        project_graph["execution_contract"] = execution_contract
 
         return {
             "exists": True,
@@ -126,6 +139,7 @@ class WorkspaceObserver:
             "project_type_hints": project_graph["summary"]["project_types"],
             "validation_artifacts": validation_artifacts[:MAX_SUMMARY_FILES],
             "project_graph": project_graph,
+            "execution_contract": execution_contract,
         }
 
     def _is_large(self, path: Path) -> bool:

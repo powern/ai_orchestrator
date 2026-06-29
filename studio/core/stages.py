@@ -8,6 +8,7 @@ from studio.contracts import (
     build_agent_context,
     build_handoff,
 )
+from studio.contracts.execution import infer_execution_contract
 from studio.core.executor_schema import validate_executor_actions
 from studio.core.llm_adapter import LLMAdapter
 from studio.core.tester_result import StageTestResult
@@ -436,10 +437,17 @@ def run_tester_stage(run_id, workspace_path):
         "Tester stage started.",
     )
 
+    agent_context = build_agent_context(run_id, "tester", workspace_path=workspace_path)
+    execution_contract = agent_context.project.get("execution_contract") or {}
+    test_contract = execution_contract.get("test") or {}
+    test_command = test_contract.get("command") or "pytest -q"
+    test_working_directory = test_contract.get("working_directory") or "."
+
     result = action_run(
         workspace_path,
-        "pytest -q",
+        test_command,
         timeout=120,
+        working_directory=test_working_directory,
     )
 
     tester_result = StageTestResult.from_executor_result(result)
@@ -453,8 +461,13 @@ def run_tester_stage(run_id, workspace_path):
 
             bug_report = BugReportBuilder().build(tester_result)
             save_stage_output(run_id, "bug_report", bug_report)
-            analysis = FailureAnalyzer().analyze(workspace_path, tester_result, bug_report)
-            repair_plan = RepairPlanner().plan(analysis)
+            analysis = FailureAnalyzer().analyze(
+                workspace_path,
+                tester_result,
+                bug_report,
+                execution_contract=execution_contract,
+            )
+            repair_plan = RepairPlanner().plan(analysis, execution_contract=execution_contract)
             repair_plan_json = repair_plan.to_json()
             save_stage_output(
                 run_id,
@@ -521,6 +534,11 @@ def run_tester_stage(run_id, workspace_path):
                 bug_report=bug_report,
                 executor_output=executor_output,
                 repair_plan=repair_plan_json,
+                project_execution_contract=json.dumps(
+                    execution_contract,
+                    ensure_ascii=False,
+                    indent=2,
+                ),
             )
 
             save_stage_output(run_id, "result", fix_prompt)
@@ -547,7 +565,10 @@ def run_tester_stage(run_id, workspace_path):
             "runtime_readiness",
             "Tester verified the generated project behavior with pytest.",
             agent_context=build_agent_context(run_id, "tester", workspace_path=workspace_path),
-            implementation_contract={"tests_passed": True},
+            implementation_contract={
+                "tests_passed": True,
+                "project_execution_contract": execution_contract,
+            },
             recommended_focus=["runtime readiness", "manual run metadata"],
         )
     else:
@@ -565,7 +586,10 @@ def run_tester_stage(run_id, workspace_path):
             "failure_analyzer",
             "Tester observed failing validation that requires root cause analysis.",
             agent_context=build_agent_context(run_id, "tester", workspace_path=workspace_path),
-            implementation_contract={"tests_passed": False},
+            implementation_contract={
+                "tests_passed": False,
+                "project_execution_contract": execution_contract,
+            },
             known_risks=["test failure needs root cause analysis"],
             recommended_focus=["traceback", "workspace files", "project graph"],
         )
@@ -607,8 +631,21 @@ def run_fix_stage(
     coder_raw_output = get_stage_output(run_id, "coder_raw_output") or ""
     planner_output = get_stage_output(run_id, "planner_output") or ""
     architect_output = get_stage_output(run_id, "architect_output") or ""
-    analysis = FailureAnalyzer().analyze(workspace_path, tester_result, bug_report)
-    repair_plan = RepairPlanner().plan(analysis)
+    base_context = build_agent_context(
+        run_id=run_id,
+        current_stage="fix",
+        workspace_path=workspace_path,
+    )
+    execution_contract = base_context.project.get("execution_contract") or infer_execution_contract(
+        workspace_path=workspace_path,
+    ).to_dict()
+    analysis = FailureAnalyzer().analyze(
+        workspace_path,
+        tester_result,
+        bug_report,
+        execution_contract=execution_contract,
+    )
+    repair_plan = RepairPlanner().plan(analysis, execution_contract=execution_contract)
     repair_plan_json = repair_plan.to_json()
     save_stage_output(
         run_id,
@@ -632,6 +669,7 @@ def run_fix_stage(
             "tester": tester_result.to_dict(),
             "failure_analysis": analysis.to_dict(),
             "repair_plan": repair_plan.to_dict(),
+            "project_execution_contract": execution_contract,
             "static_review": static_review_output or {},
         },
     )
@@ -654,6 +692,7 @@ def run_fix_stage(
         architect_output=architect_output,
         agent_context_json=agent_context.to_prompt_json(),
         protocol_summary=PROTOCOL_SUMMARY,
+        project_execution_contract=json.dumps(execution_contract, ensure_ascii=False, indent=2),
     )
 
     if previous_error is not None:
@@ -703,6 +742,7 @@ Previous raw Fix Agent response:
         implementation_contract={
             "output": "canonical_executor_actions",
             "trigger_stage": trigger_stage,
+            "project_execution_contract": execution_contract,
         },
         recommended_focus=["review fix actions", "run repaired tests"],
     )
@@ -780,6 +820,9 @@ Constraints:
 - no code
 - for Flask visual apps, app/main.py must be runnable with python app/main.py
 - for Flask visual apps, include RUN.md and visible behavior tests
+- define a Project Execution Contract with language, project_root, source_roots, test_roots,
+  build/run/test commands, module strategy, and expected artifacts
+- keep the contract language-agnostic; language-specific details belong under module strategy
 """
 
     user_prompt = f"""

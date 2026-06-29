@@ -19,6 +19,7 @@ Use these names across prompts, context, persistence, and validation:
 - `non_negotiable_requirements`
 - `acceptance_criteria`
 - `project_graph`
+- `project_execution_contract`
 - `workspace_state`
 - `previous_stage_outputs`
 - `validation_evidence`
@@ -50,6 +51,7 @@ Agents must not output:
     "run_id": 0,
     "workspace_path": "",
     "project_graph": {},
+    "project_execution_contract": {},
     "workspace_state": {}
   },
   "pipeline": {
@@ -104,32 +106,57 @@ The canonical Executor JSON root is an array. Allowed actions:
 { "action": "run", "command": "pytest -q" }
 ```
 
+## Project Execution Contract
+
+Every generated project should have a language-agnostic execution contract describing how it is
+built, run, tested, imported or linked, and validated. The contract is the shared source of truth
+for Architect, Coder, Tester, Runtime Readiness, Failure Analyzer, Repair Planner, Fix Agent, and
+Decision Records.
+
+Required top-level fields:
+
+- `language`
+- `project_root`
+- `source_roots`
+- `test_roots`
+- `build`
+- `run`
+- `test`
+- `module_strategy`
+- `artifacts`
+
+Language-specific details belong under `module_strategy`, such as `python_imports`,
+`dotnet_namespace`, `cpp_include`, `node_module`, `go_module`, or `java_package`.
+
 ## Required Context Per Agent
 
 - Planner: original request and acceptance criteria.
-- Architect: original request, planner output, constraints, project assumptions.
-- Coder: original request, planner output, architect output, project graph if available.
+- Architect: original request, planner output, constraints, project assumptions, execution contract.
+- Coder: original request, planner output, architect output, execution contract, project graph if available.
 - Sanitizer: raw agent output, canonical action contract, schema errors.
 - Static Reviewer: canonical actions, original request, architecture, project graph if available.
-- Tester: workspace path, test command, expected behavior.
-- Failure Analyzer: tester output, workspace state, project graph, bug report.
-- Repair Planner: failure analysis, affected files, project graph, original request.
+- Tester: workspace path, execution contract test command, expected behavior.
+- Failure Analyzer: tester output, workspace state, project graph, execution contract, bug report.
+- Repair Planner: failure analysis, affected files, execution contract, project graph, original request.
 - Fix Agent: original request, acceptance criteria, non-negotiable requirements, project graph,
-  workspace state, static review findings, tester output, failure analysis, repair plan, rejected
-  actions, previous outputs.
-- Runtime Readiness: workspace state, project graph, dependency files, entrypoint hints.
+  execution contract, workspace state, static review findings, tester output, failure analysis,
+  repair plan, rejected actions, previous outputs.
+- Runtime Readiness: workspace state, project graph, execution contract, dependency files,
+  entrypoint hints.
 - Engineering Assessment: workspace state, project graph, validation evidence.
 
 ## Output Contracts
 
 - `PlannerOutput`: `goals`, `requirements`, `acceptance_criteria`, `risks`.
-- `ArchitectOutput`: `files`, `modules`, `interfaces`, `test_strategy`, `runtime_entrypoint`.
+- `ArchitectOutput`: `files`, `modules`, `interfaces`, `test_strategy`, `project_execution_contract`.
 - `CoderOutput`: canonical Executor JSON actions only.
 - `SanitizerOutput`: `actions`, `repairs_applied`, `schema_warnings`.
 - `StaticReviewOutput`: `approved`, `score`, `findings`, `rejected_actions`.
 - `TesterOutput`: `success`, `returncode`, `stdout`, `stderr`.
-- `FailureAnalysisOutput`: `root_cause`, `exception_type`, `affected_files`, `evidence`.
-- `RepairPlanOutput`: `primary_targets`, `secondary_targets`, `reason`, `expected_validation`.
+- `FailureAnalysisOutput`: `root_cause`, `exception_type`, `failure_class`, `affected_files`,
+  `project_execution_contract`, `evidence`.
+- `RepairPlanOutput`: `primary_targets`, `secondary_targets`, `reason`,
+  `project_execution_contract`, `expected_validation`.
 - `FixOutput`: canonical Executor JSON actions only.
 - `RuntimeReadinessOutput`: runtime readiness report schema.
 - `EngineeringAssessmentOutput`: `confidence`, `decision`, `workspace_summary`, `project_graph`.

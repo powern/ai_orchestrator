@@ -49,7 +49,7 @@ def action_read_file(workspace_path, path):
     return target.read_text(encoding="utf-8")
 
 
-def action_run(workspace_path, command, timeout=120):
+def action_run(workspace_path, command, timeout=120, working_directory="."):
     if not isinstance(command, str) or not command.strip():
         raise ExecutorError("Command is required")
 
@@ -59,6 +59,10 @@ def action_run(workspace_path, command, timeout=120):
         "python -m unittest",
         "python3 -m pytest",
         "python3 -m unittest",
+        "dotnet test",
+        "npm test",
+        "go test",
+        "ctest",
     ]
 
     normalized_command = command.strip()
@@ -77,12 +81,15 @@ def action_run(workspace_path, command, timeout=120):
         normalized_command = f"{sys.executable} -m {normalized_command.removeprefix('python3 -m ')}"
 
     workspace = Path(workspace_path).resolve()
+    cwd = resolve_safe_path(workspace, working_directory)
+    if not cwd.is_dir():
+        raise ExecutorError(f"Working directory does not exist: {working_directory}")
     env = os.environ.copy()
     env["PYTHONPATH"] = str(workspace)
 
     result = subprocess.run(
         normalized_command,
-        cwd=workspace,
+        cwd=cwd,
         shell=True,
         text=True,
         capture_output=True,
@@ -127,6 +134,7 @@ def execute_action(workspace_path, action):
             workspace_path,
             action["command"],
             timeout=int(action.get("timeout", 120)),
+            working_directory=action.get("working_directory", "."),
         )
 
     raise ExecutorError(f"Unknown action: {action_type}")

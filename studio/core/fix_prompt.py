@@ -161,6 +161,7 @@ class FixPromptBuilder:
         architect_output: str | None = None,
         agent_context_json: str | None = None,
         protocol_summary: str | None = None,
+        project_execution_contract: str | None = None,
     ) -> str:
         workspace_context = self._format_workspace_files(workspace_files or [])
         task_context = task_description or "Not available."
@@ -175,6 +176,9 @@ class FixPromptBuilder:
         architect_context = architect_output or "No architect output was available."
         agent_context = agent_context_json or "No AgentContext was available."
         protocol_context = protocol_summary or "No protocol summary was available."
+        execution_contract = (
+            project_execution_contract or "No Project Execution Contract was available."
+        )
         static_review_instructions = ""
 
         if trigger_stage == "static_review_failed":
@@ -201,6 +205,9 @@ Agent Protocol:
 
 AgentContext:
 {agent_context}
+
+Project Execution Contract:
+{execution_contract}
 
 Original task description:
 {task_context}
@@ -270,6 +277,9 @@ Rules:
 - If implementation is correct and a generated test assertion is wrong, fix the test,
   but explain this choice only through the selected Executor actions.
 - Do not invent package roots or import paths.
+- Follow the Project Execution Contract for build, run, test, and module semantics.
+- Treat the Project Execution Contract as protected unless traceback evidence proves it wrong.
+- If the contract is wrong, repair the contract-aligned files and imports together.
 - Base imports on the actual workspace tree and current file locations.
 - Prefer repairing source files and tests consistently over overwriting tests blindly.
 - Preserve the user's requested behavior from the original task.

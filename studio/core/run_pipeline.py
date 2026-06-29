@@ -200,13 +200,19 @@ def _run_fix_stage_with_context(run_id, workspace_path, coder_output, tester_res
 
 
 def run_runtime_readiness_stage(run_id, workspace_path):
+    from studio.contracts import build_agent_context
+
     add_event(
         run_id,
         "runtime_readiness_started",
         "runtime_readiness",
         "Runtime readiness validation started.",
     )
-    report = RuntimeReadinessValidator().validate(workspace_path)
+    context = build_agent_context(run_id, "runtime_readiness", workspace_path=workspace_path)
+    report = RuntimeReadinessValidator().validate(
+        workspace_path,
+        context.project.get("execution_contract"),
+    )
     report_json = report.to_json()
     save_stage_output(run_id, "runtime_readiness", report_json)
 

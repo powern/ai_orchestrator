@@ -47,6 +47,15 @@ def validate_executor_actions(actions: Any) -> list[dict[str, Any]]:
 
         if action_type == "run":
             _require_string_field(action, action_type, "command", actions)
+            working_directory = action.get("working_directory")
+            if working_directory is not None:
+                if not isinstance(working_directory, str):
+                    raise ExecutorSchemaValidationError(
+                        "run.working_directory expected str, "
+                        f"got {type(working_directory).__name__}",
+                        actions,
+                    )
+                _validate_relative_path(action_type, working_directory, actions)
 
             timeout = action.get("timeout")
             if timeout is not None and not isinstance(timeout, int):

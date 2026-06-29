@@ -1,3 +1,4 @@
+from studio.contracts.execution import infer_execution_contract, validate_execution_contract
 from studio.core.agent import BaseAgent
 from studio.execution_model.program import ExecutorProgram
 from studio.reviewer.result import ReviewerResult
@@ -13,9 +14,14 @@ class StaticReviewerAgent(BaseAgent):
         program = ExecutorProgram.from_dicts(actions)
 
         seen_paths = set()
+        raw_actions = [executor_action.to_dict() for executor_action in program]
+        planned_files = [
+            action.get("path")
+            for action in raw_actions
+            if action.get("action") == "write_file" and action.get("path")
+        ]
 
-        for executor_action in program:
-            action = executor_action.to_dict()
+        for action in raw_actions:
             action_type = action.get("action")
             path = action.get("path")
 
@@ -59,6 +65,16 @@ class StaticReviewerAgent(BaseAgent):
                 for item in dangerous:
                     if item in command:
                         findings.append(f"Dangerous command found: {command}")
+
+        execution_contract = infer_execution_contract(
+            executor_actions=raw_actions,
+        )
+        for violation in validate_execution_contract(
+            execution_contract,
+            planned_files=planned_files,
+        ):
+            if violation.severity == "error":
+                findings.append(f"Execution contract violation: {violation.message}")
 
         score = max(0, 100 - len(findings) * 20)
 

@@ -85,6 +85,12 @@
             <summary>Implementation Contract</summary>
             <pre>{{ handoff.payload.implementation_contract }}</pre>
         </details>
+        {% if handoff.payload.implementation_contract.project_execution_contract is defined %}
+        <details class="stage-output">
+            <summary>Project Execution Contract</summary>
+            <pre>{{ handoff.payload.implementation_contract.project_execution_contract }}</pre>
+        </details>
+        {% endif %}
         <details class="stage-output">
             <summary>Recommended Focus</summary>
             <pre>{{ handoff.payload.recommended_focus }}</pre>
@@ -145,6 +151,12 @@
         <summary>Graph Summary</summary>
         <pre>{{ project_graph.summary }}</pre>
     </details>
+    {% if project_graph.execution_contract is defined %}
+    <details class="stage-output">
+        <summary>Project Execution Contract</summary>
+        <pre>{{ project_graph.execution_contract }}</pre>
+    </details>
+    {% endif %}
     <details class="stage-output">
         <summary>Entrypoints</summary>
         <pre>{{ project_graph.entrypoints }}</pre>
