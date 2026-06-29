@@ -23,9 +23,6 @@
     <a href="#planner">Planner</a>
     <a href="#architect">Architect</a>
     <a href="#coder">Coder</a>
-    {% if engineering_critic %}
-        <a href="#engineering-critic">Engineering Critic</a>
-    {% endif %}
     <a href="#executor">Executor</a>
     <a href="#tester">Tester</a>
     <a href="#analyzer">Analyzer</a>
@@ -48,35 +45,6 @@
     <p>Created: {{ run.created_at }}</p>
     <p>Updated: {{ run.updated_at }}</p>
 </section>
-
-{% if engineering_critic %}
-<section id="engineering-critic" class="run-summary">
-    <h3>Engineering Critic</h3>
-    <p>Status: {{ engineering_critic.status }}</p>
-    <p>Confidence: {{ engineering_critic.confidence }}</p>
-    <p>Recommended Objective: {{ engineering_critic.recommended_objective }}</p>
-    {% if engineering_critic.issues %}
-    <table>
-        <tr>
-            <th>Severity</th>
-            <th>Type</th>
-            <th>Path</th>
-            <th>Message</th>
-        </tr>
-        {% for issue in engineering_critic.issues %}
-        <tr>
-            <td>{{ issue.severity }}</td>
-            <td>{{ issue.type }}</td>
-            <td>{{ issue.path or '' }}</td>
-            <td>{{ issue.message }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-    {% else %}
-    <p>No critic issues.</p>
-    {% endif %}
-</section>
-{% endif %}
 
 {% if engineering_assessment %}
 {% set decision = engineering_assessment.decision %}
@@ -150,8 +118,6 @@
     ('architect', 'Architect Output', run.architect_output),
     ('coder', 'Coder Raw Output', run.coder_raw_output),
     ('coder-sanitizer-error', 'Coder Sanitizer Error', run.coder_sanitizer_error),
-    ('engineering-critic-output', 'Engineering Critic Output', run.engineering_critic_output),
-    ('coder-revision', 'Coder Revision Output', run.coder_revision_output),
     ('coder-output', 'Coder Output', run.coder_output),
     ('rejected-actions', 'Rejected Executor Actions', run.coder_output),
     ('static-review-output', 'Static Review Output', run.executor_output),
