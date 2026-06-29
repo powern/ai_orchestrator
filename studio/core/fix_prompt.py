@@ -263,6 +263,13 @@ Rules:
 - Base imports on the actual workspace tree and current file locations.
 - Prefer repairing source files and tests consistently over overwriting tests blindly.
 - Preserve the user's requested behavior from the original task.
+- Never replace requested functionality with Hello World.
+- Never remove requested features.
+- Never replace implementation with placeholders.
+- Never introduce pass-only tests.
+- Never delete failing behavior instead of fixing it.
+- If the repair cannot preserve the original requirements, fail through tests rather than
+  silently simplifying behavior.
 - Do not delete files.
 - Do not use absolute paths.
 - Do not modify AI Studio itself.

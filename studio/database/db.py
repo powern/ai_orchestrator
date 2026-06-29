@@ -52,6 +52,8 @@ def init_db():
                 coder_raw_output TEXT,
                 coder_output TEXT,
                 coder_sanitizer_error TEXT,
+                engineering_critic_output TEXT,
+                coder_revision_output TEXT,
                 executor_output TEXT,
                 failure_analysis TEXT,
                 repair_plan TEXT,

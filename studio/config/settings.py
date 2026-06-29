@@ -40,6 +40,8 @@ STAGE_PROGRESS = {
     "architect": 20,
     "coder": 35,
     "coder_failed": 35,
+    "engineering_critic": 45,
+    "coder_revision": 45,
     "static_reviewer": 50,
     "fix_failed": 50,
     "executor": 65,

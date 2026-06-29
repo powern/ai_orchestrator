@@ -13,6 +13,8 @@ from studio.core.runtime_readiness import RuntimeReadinessValidator
 from studio.core.stages import (
     run_architect_stage,
     run_coder_placeholder,
+    run_coder_revision_stage,
+    run_engineering_critic_stage,
     run_executor_stage,
     run_fix_stage,
     run_tester_stage,
@@ -271,6 +273,45 @@ class RunPipeline:
         if coder_output is None:
             maybe_record_engineering_shadow()
             return
+
+        critic_result = run_engineering_critic_stage(
+            run_id,
+            planner_output,
+            architect_output,
+            coder_output,
+        )
+
+        if critic_result.status == "revision_required":
+            coder_output = run_coder_revision_stage(
+                run_id,
+                planner_output,
+                architect_output,
+                coder_output,
+                critic_result,
+            )
+            critic_result = run_engineering_critic_stage(
+                run_id,
+                planner_output,
+                architect_output,
+                coder_output,
+            )
+
+            if critic_result.status == "revision_required":
+                update_run_status(
+                    run_id,
+                    "failed",
+                    "engineering_critic",
+                    "Run failed because Engineering Critic still requires revision.",
+                )
+                add_event(
+                    run_id,
+                    "run_failed",
+                    "engineering_critic",
+                    "Run failed because Engineering Critic still requires revision.",
+                    critic_result.to_json(),
+                )
+                maybe_record_engineering_shadow()
+                return
 
         static_review = StaticReviewerAgent().review(
             normalize_coder_json(coder_output),

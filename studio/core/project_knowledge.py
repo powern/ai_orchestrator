@@ -1,5 +1,6 @@
 import ast
 import re
+import tempfile
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -59,6 +60,57 @@ class ProjectKnowledgeGraphBuilder:
         graph["nodes"] = self._nodes(graph)
         graph["edges"] = self._edges(graph)
         return graph
+
+    def build_from_file_map(self, files: dict[str, str]) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workspace = Path(tmp_dir)
+            for relative, content in files.items():
+                path = workspace / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+
+            source_files = sorted(
+                relative
+                for relative in files
+                if relative.endswith(".py")
+                and not relative.startswith("tests/")
+                and not Path(relative).name.startswith("test_")
+            )
+            test_files = sorted(
+                relative
+                for relative in files
+                if relative.endswith(".py")
+                and (relative.startswith("tests/") or Path(relative).name.startswith("test_"))
+            )
+            dependency_files = sorted(
+                relative
+                for relative in files
+                if Path(relative).name
+                in {
+                    "requirements.txt",
+                    "requirements-dev.txt",
+                    "pyproject.toml",
+                    "package.json",
+                    "go.mod",
+                    "Cargo.toml",
+                }
+            )
+            metadata_files = sorted(
+                relative
+                for relative in files
+                if Path(relative).name in {"RUN.md", "README.md", "README.rst"}
+            )
+            validation_artifacts = sorted(
+                relative for relative in files if relative in {"pytest.ini", ".flake8"}
+            )
+            return self.build(
+                workspace=workspace,
+                source_files=source_files,
+                test_files=test_files,
+                dependency_files=dependency_files,
+                metadata_files=metadata_files,
+                validation_artifacts=validation_artifacts,
+            )
 
     def empty(self) -> dict[str, Any]:
         return {

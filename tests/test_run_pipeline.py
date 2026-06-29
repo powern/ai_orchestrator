@@ -90,6 +90,11 @@ def test_pipeline_runs_fix_when_static_review_fails(monkeypatch, tmp_path):
     monkeypatch.setattr(run_pipeline, "run_coder_placeholder", fake_coder)
     monkeypatch.setattr(
         run_pipeline,
+        "run_engineering_critic_stage",
+        lambda *_, **__: _critic_result("approved"),
+    )
+    monkeypatch.setattr(
+        run_pipeline,
         "_run_fix_stage_with_context",
         lambda run_id, workspace_path, coder_output, tester_result, context: fake_fix(
             run_id,
@@ -114,3 +119,87 @@ def test_pipeline_runs_fix_when_static_review_fails(monkeypatch, tmp_path):
     assert calls["fix"] == 1
     assert calls["executor"] == 1
     assert calls["tester"] == 1
+
+
+def test_pipeline_revises_coder_output_when_critic_requires_revision(monkeypatch, tmp_path):
+    from studio.core import run_pipeline
+    from studio.core.run_pipeline import RunPipeline
+    from studio.core.tester_result import StageTestResult
+
+    calls = {
+        "critic": 0,
+        "revision": 0,
+        "executor_payload": None,
+    }
+    project = {"workspace_path": str(tmp_path)}
+
+    def fake_critic(*_):
+        calls["critic"] += 1
+        if calls["critic"] == 1:
+            return _critic_result("revision_required")
+        return _critic_result("approved")
+
+    def fake_revision(*_):
+        calls["revision"] += 1
+        return """
+        [
+          {
+            "action": "write_file",
+            "path": "app/main.py",
+            "content": "def main():\\n    return 'revised'\\n"
+          }
+        ]
+        """
+
+    def fake_executor(run_id, workspace_path, coder_output):
+        calls["executor_payload"] = coder_output
+        return []
+
+    monkeypatch.setattr(run_pipeline, "run_architect_stage", lambda *_: "architect")
+    monkeypatch.setattr(
+        run_pipeline,
+        "run_coder_placeholder",
+        lambda *_: """
+        [
+          {
+            "action": "write_file",
+            "path": "app/main.py",
+            "content": "print('Hello World')"
+          }
+        ]
+        """,
+    )
+    monkeypatch.setattr(run_pipeline, "run_engineering_critic_stage", fake_critic)
+    monkeypatch.setattr(run_pipeline, "run_coder_revision_stage", fake_revision)
+    monkeypatch.setattr(run_pipeline.StaticReviewerAgent, "review", lambda *_: _review(True))
+    monkeypatch.setattr(run_pipeline, "run_executor_stage", fake_executor)
+    monkeypatch.setattr(
+        run_pipeline,
+        "run_tester_stage",
+        lambda *_: StageTestResult(success=True, returncode=0, stdout="ok", stderr=""),
+    )
+    monkeypatch.setattr(run_pipeline, "run_runtime_readiness_stage", lambda *_: (True, None))
+    monkeypatch.setattr(run_pipeline, "update_run_status", lambda *_, **__: None)
+    monkeypatch.setattr(run_pipeline, "publish_run_event", lambda *_, **__: None)
+
+    RunPipeline(lambda *_: "planner").execute(1, project)
+
+    assert calls["critic"] == 2
+    assert calls["revision"] == 1
+    assert "revised" in calls["executor_payload"]
+
+
+class _critic_result:
+    def __init__(self, status):
+        self.status = status
+
+    def to_json(self):
+        return f'{{"status": "{self.status}"}}'
+
+
+class _review:
+    def __init__(self, approved):
+        self.approved = approved
+        self.summary = "ok"
+        self.score = 1.0
+        self.findings = []

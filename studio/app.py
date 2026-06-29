@@ -1,3 +1,5 @@
+import json
+
 from flask import Flask, abort, jsonify, redirect, render_template, request, url_for
 
 from studio.config.settings import FLASK_HOST, FLASK_PORT
@@ -31,6 +33,8 @@ STAGE_OUTPUT_FIELDS = [
     "architect_output",
     "coder_raw_output",
     "coder_sanitizer_error",
+    "engineering_critic_output",
+    "coder_revision_output",
     "coder_output",
     "executor_output",
     "tester_output",
@@ -49,6 +53,16 @@ STAGE_OUTPUT_FIELDS = [
 
 def row_to_dict(row):
     return dict(row) if row is not None else None
+
+
+def parse_json(value):
+    if not value:
+        return None
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 @app.route("/")
@@ -140,6 +154,7 @@ def run_detail(run_id):
     next_run = get_next_run(run_id)
     events = list_events(run_id)
     engineering_assessment = get_latest_engineering_assessment(run_id)
+    engineering_critic = parse_json(run["engineering_critic_output"])
     return render_template(
         "run_detail.html",
         run=run,
@@ -149,6 +164,7 @@ def run_detail(run_id):
         next_run=next_run,
         events=events,
         engineering_assessment=engineering_assessment,
+        engineering_critic=engineering_critic,
     )
 
 
@@ -190,6 +206,7 @@ def api_run(run_id):
     runtime = get_project_runtime(run["project_id"])
     engineering_assessment = get_latest_engineering_assessment(run_id)
     project_graph = engineering_assessment.get("project_graph") if engineering_assessment else None
+    engineering_critic = parse_json(run["engineering_critic_output"])
     return jsonify(
         {
             "run": row_to_dict(run),
@@ -198,6 +215,7 @@ def api_run(run_id):
             "events": [dict(row) for row in list_events(run_id)],
             "stage_outputs": {field: run[field] for field in STAGE_OUTPUT_FIELDS},
             "engineering_assessment": engineering_assessment,
+            "engineering_critic": engineering_critic,
             "project_graph": project_graph,
         }
     )

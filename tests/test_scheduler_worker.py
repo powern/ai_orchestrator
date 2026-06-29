@@ -1,6 +1,6 @@
 import json
 
-from studio.core import stages
+from studio.core import run_pipeline, stages
 from studio.database.db import init_db
 from studio.database.migrations import migrate
 from studio.scheduler import worker
@@ -78,6 +78,11 @@ def test_scheduler_processes_next_queued_run(monkeypatch):
 
     monkeypatch.setattr(worker, "LLMAdapter", lambda: FakeLLMAdapter())
     monkeypatch.setattr(stages, "LLMAdapter", FakeLLMAdapter)
+    monkeypatch.setattr(
+        run_pipeline,
+        "run_engineering_critic_stage",
+        lambda *_, **__: _critic_result("approved"),
+    )
 
     project_id = create_project(
         "Scheduler Planner Test Project",
@@ -113,6 +118,14 @@ def test_scheduler_processes_next_queued_run(monkeypatch):
     assert "coder_completed" in event_types
     assert "executor_started" in event_types
     assert "tester_completed" in event_types
+
+
+class _critic_result:
+    def __init__(self, status):
+        self.status = status
+
+    def to_json(self):
+        return json.dumps({"status": self.status})
 
 
 def test_scheduler_keeps_malformed_coder_output_inside_coder_stage(monkeypatch):

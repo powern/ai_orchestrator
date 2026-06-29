@@ -108,6 +108,70 @@ def test_run_api_exposes_project_graph(monkeypatch):
     assert payload["engineering_assessment"]["project_graph"]["schema_version"] == 1
 
 
+def test_run_api_exposes_engineering_critic(monkeypatch):
+    setup_database()
+    from studio.app import app
+
+    project_id = create_project("Critic API", "Python app")
+    run_id = create_run(project_id)
+    save_stage_output(
+        run_id,
+        "engineering_critic_output",
+        json.dumps(
+            {
+                "status": "revision_required",
+                "confidence": 0.82,
+                "issues": [
+                    {
+                        "severity": "critical",
+                        "type": "pass_only_tests",
+                        "message": "Generated tests contain pass-only test cases.",
+                    }
+                ],
+                "recommended_objective": "Replace placeholder tests.",
+            }
+        ),
+    )
+
+    response = app.test_client().get(f"/api/runs/{run_id}")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["engineering_critic"]["status"] == "revision_required"
+
+
+def test_run_detail_displays_engineering_critic(monkeypatch):
+    setup_database()
+    from studio.app import app
+
+    project_id = create_project("Critic UI", "Python app")
+    run_id = create_run(project_id)
+    save_stage_output(
+        run_id,
+        "engineering_critic_output",
+        json.dumps(
+            {
+                "status": "revision_required",
+                "confidence": 0.82,
+                "issues": [
+                    {
+                        "severity": "critical",
+                        "type": "pass_only_tests",
+                        "message": "Generated tests contain pass-only test cases.",
+                    }
+                ],
+                "recommended_objective": "Replace placeholder tests.",
+            }
+        ),
+    )
+
+    response = app.test_client().get(f"/runs/{run_id}")
+
+    assert response.status_code == 200
+    assert b"Engineering Critic" in response.data
+    assert b"pass_only_tests" in response.data
+
+
 def test_shadow_off_pipeline_does_not_store_engineering_assessment(monkeypatch, tmp_path):
     from studio.core import run_pipeline
 
@@ -132,6 +196,11 @@ def test_shadow_off_pipeline_does_not_store_engineering_assessment(monkeypatch, 
         ),
     )
     monkeypatch.setattr(run_pipeline.StaticReviewerAgent, "review", lambda *_: _review(True))
+    monkeypatch.setattr(
+        run_pipeline,
+        "run_engineering_critic_stage",
+        lambda *_, **__: _critic_result("approved"),
+    )
     monkeypatch.setattr(run_pipeline, "run_executor_stage", lambda *_: [])
 
     def fake_tester(*_):
@@ -159,3 +228,11 @@ class _review:
         self.summary = "ok"
         self.score = 1.0
         self.findings = []
+
+
+class _critic_result:
+    def __init__(self, status):
+        self.status = status
+
+    def to_json(self):
+        return json.dumps({"status": self.status})
