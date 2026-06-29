@@ -5,6 +5,7 @@ from typing import Any
 
 from studio.contracts.execution import infer_execution_contract
 from studio.contracts.handoff import load_handoff_history, load_latest_handoff
+from studio.core.project_state import ProjectStateBuilder
 from studio.core.workspace_observer import WorkspaceObserver
 from studio.services.engineering_service import get_latest_engineering_assessment
 from studio.services.event_service import list_events
@@ -38,6 +39,11 @@ class AgentContext:
         ignored_summary = workspace_state.get("ignored_files_summary")
         if isinstance(ignored_summary, dict):
             ignored_summary["examples"] = []
+        project_state = payload.get("project", {}).get("project_state", {})
+        for section_name in ("actual_files", "planned_files", "merged_files"):
+            section = project_state.get(section_name, {})
+            for item in section.get("files", []):
+                item["content_preview"] = ""
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
@@ -54,8 +60,20 @@ def build_agent_context(
     project = _project(project_id)
     resolved_workspace = workspace_path or project.get("workspace_path") or ""
     workspace_state = _workspace_state(resolved_workspace)
-    project_graph = workspace_state.get("project_graph", {})
-    execution_contract = workspace_state.get("execution_contract") or infer_execution_contract(
+    handoff_history = load_handoff_history(run_id) if run else []
+    latest_handoff = load_latest_handoff(run_id) if run else None
+    project_state = ProjectStateBuilder().build(
+        run_id=run_id,
+        project_id=project_id,
+        workspace_path=resolved_workspace,
+        stage_outputs=previous_stage_outputs,
+        handoff_history=handoff_history,
+    )
+    project_state_payload = project_state.to_dict()
+    project_graph = project_state.project_graph or workspace_state.get("project_graph", {})
+    execution_contract = project_state.execution_contract or workspace_state.get(
+        "execution_contract"
+    ) or infer_execution_contract(
         workspace_path=resolved_workspace or None,
         workspace_state=workspace_state,
         project_graph=project_graph,
@@ -95,6 +113,8 @@ def build_agent_context(
             "project_id": project_id,
             "run_id": run_id,
             "workspace_path": resolved_workspace,
+            "project_state": project_state_payload,
+            "project_state_summary": project_state.summary(),
             "project_graph": project_graph,
             "workspace_state": workspace_state,
             "execution_contract": execution_contract,
@@ -104,8 +124,8 @@ def build_agent_context(
             "current_stage": current_stage,
             "previous_stage_outputs": outputs,
             "events": [dict(row) for row in list_events(run_id)] if run else [],
-            "latest_handoff": load_latest_handoff(run_id) if run else None,
-            "handoff_history": load_handoff_history(run_id) if run else [],
+            "latest_handoff": latest_handoff,
+            "handoff_history": handoff_history,
         },
         evidence=evidence,
         validation_evidence=evidence,

@@ -49,6 +49,23 @@
     <p>Updated: {{ run.updated_at }}</p>
 </section>
 
+{% if project_state %}
+{% set state_summary = project_state.summary %}
+<section id="project-state" class="run-summary">
+    <h3>Project State</h3>
+    <p>Actual Files: {{ state_summary.actual_file_count }}</p>
+    <p>Planned Files: {{ state_summary.planned_file_count }}</p>
+    <p>Merged Files: {{ state_summary.merged_file_count }}</p>
+    <p>Graph Source: {{ state_summary.graph_source }}</p>
+    <p>Contract Source: {{ state_summary.contract_source }}</p>
+    <p>Language: {{ state_summary.language }}</p>
+    <p>Project Types: {{ state_summary.project_types|join(', ') }}</p>
+    <p>Entrypoints: {{ state_summary.entrypoints|join(', ') }}</p>
+    <p>Routes: {{ state_summary.routes|join(', ') }}</p>
+    <p>Test Roots: {{ state_summary.test_roots|join(', ') }}</p>
+</section>
+{% endif %}
+
 {% if agent_handoffs %}
 <section id="engineering-timeline" class="run-summary">
     <h3>Engineering Timeline</h3>

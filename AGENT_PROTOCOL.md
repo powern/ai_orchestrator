@@ -19,6 +19,7 @@ Use these names across prompts, context, persistence, and validation:
 - `non_negotiable_requirements`
 - `acceptance_criteria`
 - `project_graph`
+- `project_state`
 - `project_execution_contract`
 - `workspace_state`
 - `previous_stage_outputs`
@@ -50,6 +51,8 @@ Agents must not output:
     "project_id": 0,
     "run_id": 0,
     "workspace_path": "",
+    "project_state": {},
+    "project_state_summary": {},
     "project_graph": {},
     "project_execution_contract": {},
     "workspace_state": {}
@@ -128,13 +131,30 @@ Required top-level fields:
 Language-specific details belong under `module_strategy`, such as `python_imports`,
 `dotnet_namespace`, `cpp_include`, `node_module`, `go_module`, or `java_package`.
 
+## Unified Project State
+
+`project_state` is the shared evidence snapshot for stages. It distinguishes materialized
+workspace files from planned Executor actions and exposes merged virtual files for pre-execution
+analysis. Major components should consume `project_state` when available instead of rebuilding
+their own project view.
+
+Required summary fields:
+
+- actual file count;
+- planned file count;
+- merged file count;
+- graph source;
+- contract source;
+- detected project types;
+- entrypoints, routes, source roots, and test roots.
+
 ## Required Context Per Agent
 
 - Planner: original request and acceptance criteria.
 - Architect: original request, planner output, constraints, project assumptions, execution contract.
 - Coder: original request, planner output, architect output, execution contract, project graph if available.
 - Sanitizer: raw agent output, canonical action contract, schema errors.
-- Static Reviewer: canonical actions, original request, architecture, project graph if available.
+- Static Reviewer: canonical actions, original request, architecture, project_state if available.
 - Tester: workspace path, execution contract test command, expected behavior.
 - Failure Analyzer: tester output, workspace state, project graph, execution contract, bug report.
 - Repair Planner: failure analysis, affected files, execution contract, project graph, original request.

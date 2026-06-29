@@ -114,15 +114,21 @@ class DiagnosticCaseBuilder:
         traceback_files: list[str],
         import_graph: dict[str, list[str]],
         execution_contract: dict[str, Any] | None = None,
+        project_state: dict[str, Any] | None = None,
         latest_handoff: dict[str, Any] | None = None,
         original_requirements: str = "",
         previous_failure_signatures: list[str] | None = None,
     ) -> DiagnosticCase:
         workspace = Path(workspace_path)
         raw_output = f"{tester_result.stdout}\n{tester_result.stderr}".strip()
-        relevant_files = self._relevant_files(workspace, traceback_files)
-        project_graph = self._project_graph(workspace, relevant_files)
-        contract = execution_contract or infer_execution_contract(
+        relevant_files = self._relevant_files(workspace, traceback_files, project_state)
+        project_graph = (project_state or {}).get("project_graph") or self._project_graph(
+            workspace,
+            relevant_files,
+        )
+        contract = execution_contract or (project_state or {}).get(
+            "execution_contract"
+        ) or infer_execution_contract(
             workspace_path=workspace,
             project_graph=project_graph,
         ).to_dict()
@@ -148,7 +154,7 @@ class DiagnosticCaseBuilder:
             exception_message=exception_message,
             failing_test_file=failing_test,
             failing_production_file=failing_source,
-            workspace_tree=FixWorkspaceContextBuilder().build_tree(workspace),
+            workspace_tree=self._workspace_tree(workspace, project_state),
             relevant_files=relevant_files,
             project_graph=project_graph,
             execution_contract=contract,
@@ -177,7 +183,16 @@ class DiagnosticCaseBuilder:
                     return candidate
         return None
 
-    def _relevant_files(self, workspace: Path, traceback_files: list[str]) -> dict[str, str]:
+    def _relevant_files(
+        self,
+        workspace: Path,
+        traceback_files: list[str],
+        project_state: dict[str, Any] | None = None,
+    ) -> dict[str, str]:
+        state_files = self._files_from_project_state(project_state)
+        if state_files:
+            return state_files
+
         paths = []
         for relative in traceback_files:
             if relative not in paths:
@@ -197,6 +212,34 @@ class DiagnosticCaseBuilder:
             if path.is_file():
                 snippets[relative] = path.read_text(encoding="utf-8", errors="replace")[:8000]
         return snippets
+
+    def _files_from_project_state(
+        self,
+        project_state: dict[str, Any] | None,
+    ) -> dict[str, str]:
+        if not project_state:
+            return {}
+        files = {}
+        for item in (project_state.get("merged_files") or {}).get("files", []):
+            path = item.get("path")
+            if path:
+                files[path] = item.get("content_preview", "")
+        return files
+
+    def _workspace_tree(
+        self,
+        workspace: Path,
+        project_state: dict[str, Any] | None,
+    ) -> str:
+        if project_state:
+            paths = [
+                item.get("path")
+                for item in (project_state.get("merged_files") or {}).get("files", [])
+                if item.get("path")
+            ]
+            if paths:
+                return "\n".join(sorted(paths))
+        return FixWorkspaceContextBuilder().build_tree(workspace)
 
     def _project_graph(self, workspace: Path, relevant_files: dict[str, str]) -> dict[str, Any]:
         source_files = [path for path in relevant_files if path.startswith("app/")]

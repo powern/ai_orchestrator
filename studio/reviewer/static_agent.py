@@ -1,5 +1,6 @@
 from studio.contracts.execution import infer_execution_contract, validate_execution_contract
 from studio.core.agent import BaseAgent
+from studio.core.project_state import ProjectStateBuilder
 from studio.execution_model.program import ExecutorProgram
 from studio.reviewer.result import ReviewerResult
 
@@ -9,7 +10,7 @@ FLASK_HELPERS = ("redirect", "url_for", "render_template_string")
 class StaticReviewerAgent(BaseAgent):
     name = "static_reviewer"
 
-    def process(self, actions: list) -> ReviewerResult:
+    def process(self, actions: list, project_state=None) -> ReviewerResult:
         findings = []
         program = ExecutorProgram.from_dicts(actions)
 
@@ -66,9 +67,11 @@ class StaticReviewerAgent(BaseAgent):
                     if item in command:
                         findings.append(f"Dangerous command found: {command}")
 
-        execution_contract = infer_execution_contract(
+        state = project_state or ProjectStateBuilder().build(executor_actions=raw_actions)
+        state_payload = state.to_dict() if hasattr(state, "to_dict") else state
+        execution_contract = state_payload.get("execution_contract") or infer_execution_contract(
             executor_actions=raw_actions,
-        )
+        ).to_dict()
         for violation in validate_execution_contract(
             execution_contract,
             planned_files=planned_files,
@@ -99,8 +102,8 @@ class StaticReviewerAgent(BaseAgent):
             approved=approved,
         )
 
-    def review(self, actions: list) -> ReviewerResult:
-        return self.run(actions)
+    def review(self, actions: list, project_state=None) -> ReviewerResult:
+        return self.process(actions, project_state=project_state)
 
     def _review_flask_file(self, path: str | None, content: str) -> list[str]:
         if not path or not path.endswith(".py") or not path.startswith("app"):

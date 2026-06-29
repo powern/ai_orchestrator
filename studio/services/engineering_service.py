@@ -6,6 +6,7 @@ from studio.core.engineering_assessment import (
     ConfidenceAssessor,
     EngineeringDecisionModel,
 )
+from studio.core.project_state import ProjectStateBuilder
 from studio.core.workspace_observer import WorkspaceObserver
 from studio.database.db import get_connection
 from studio.events.publisher import publish_run_event
@@ -45,6 +46,14 @@ def record_engineering_shadow_assessment(run_id: int, project: dict | None) -> d
     )
 
     observation = WorkspaceObserver().observe(workspace_path)
+    project_state = ProjectStateBuilder().build(
+        run_id=run_id,
+        project_id=run["project_id"],
+        workspace_path=workspace_path,
+        executor_actions=run.get("coder_output"),
+    )
+    observation["project_state_summary"] = project_state.summary()
+    observation["project_state_source"] = project_state.state_source
     publish_run_event(
         run_id,
         run["project_id"],

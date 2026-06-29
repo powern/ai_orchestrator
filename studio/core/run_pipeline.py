@@ -9,6 +9,7 @@ from studio.config.settings import (
 from studio.core.executor_schema import validate_executor_actions
 from studio.core.json_utils import normalize_coder_json
 from studio.core.llm_adapter import LLMAdapter
+from studio.core.project_state import ProjectStateBuilder
 from studio.core.runtime_readiness import RuntimeReadinessValidator
 from studio.core.stages import (
     run_architect_stage,
@@ -278,8 +279,16 @@ class RunPipeline:
             maybe_record_engineering_shadow()
             return
 
+        coder_actions = normalize_coder_json(coder_output)
+        static_project_state = ProjectStateBuilder().build(
+            run_id=run_id,
+            project_id=project_id,
+            workspace_path=project["workspace_path"],
+            executor_actions=coder_actions,
+        )
         static_review = StaticReviewerAgent().review(
-            normalize_coder_json(coder_output),
+            coder_actions,
+            static_project_state,
         )
 
         add_event(
@@ -332,6 +341,7 @@ class RunPipeline:
                     "trigger_stage": "static_review_failed",
                     "static_review_output": static_review_output,
                     "rejected_actions": coder_output,
+                    "project_state": static_project_state.to_dict(),
                 },
             )
 
@@ -350,7 +360,13 @@ class RunPipeline:
                 return
             actions, coder_output = sanitized_fix
 
-            static_review = StaticReviewerAgent().review(actions)
+            static_project_state = ProjectStateBuilder().build(
+                run_id=run_id,
+                project_id=project_id,
+                workspace_path=project["workspace_path"],
+                executor_actions=actions,
+            )
+            static_review = StaticReviewerAgent().review(actions, static_project_state)
 
             add_event(
                 run_id,
@@ -455,7 +471,13 @@ class RunPipeline:
             return
         actions, coder_output = sanitized_fix
 
-        static_review = StaticReviewerAgent().review(actions)
+        fix_project_state = ProjectStateBuilder().build(
+            run_id=run_id,
+            project_id=project_id,
+            workspace_path=project["workspace_path"],
+            executor_actions=actions,
+        )
+        static_review = StaticReviewerAgent().review(actions, fix_project_state)
 
         add_event(
             run_id,

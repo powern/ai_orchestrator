@@ -72,6 +72,7 @@ class FailureAnalyzer:
         tester_result: StageTestResult,
         bug_report: str = "",
         execution_contract: dict[str, Any] | None = None,
+        project_state: dict[str, Any] | None = None,
     ) -> FailureAnalysis:
         workspace = Path(workspace_path)
         output = f"{tester_result.stdout}\n{tester_result.stderr}\n{bug_report}"
@@ -96,6 +97,7 @@ class FailureAnalyzer:
             traceback_files,
             dependency_graph,
             execution_contract=execution_contract,
+            project_state=project_state,
         )
         hypotheses = HypothesisGenerator().generate(diagnostic_case)
         verified_diagnosis = HypothesisVerifier().verify(diagnostic_case, hypotheses)

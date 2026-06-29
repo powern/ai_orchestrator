@@ -2,6 +2,7 @@ from flask import Flask, abort, jsonify, redirect, render_template, request, url
 
 from studio.config.settings import FLASK_HOST, FLASK_PORT
 from studio.contracts.handoff import load_handoff_history
+from studio.core.project_state import ProjectStateBuilder
 from studio.database.db import init_db
 from studio.database.migrations import migrate
 from studio.events.publisher import publish_run_event
@@ -142,6 +143,7 @@ def run_detail(run_id):
     events = list_events(run_id)
     engineering_assessment = get_latest_engineering_assessment(run_id)
     agent_handoffs = load_handoff_history(run_id)
+    project_state = _project_state_for_run(run, agent_handoffs)
     return render_template(
         "run_detail.html",
         run=run,
@@ -152,6 +154,7 @@ def run_detail(run_id):
         events=events,
         engineering_assessment=engineering_assessment,
         agent_handoffs=agent_handoffs,
+        project_state=project_state,
     )
 
 
@@ -194,6 +197,7 @@ def api_run(run_id):
     engineering_assessment = get_latest_engineering_assessment(run_id)
     project_graph = engineering_assessment.get("project_graph") if engineering_assessment else None
     agent_handoffs = load_handoff_history(run_id)
+    project_state = _project_state_for_run(run, agent_handoffs)
     return jsonify(
         {
             "run": row_to_dict(run),
@@ -204,6 +208,8 @@ def api_run(run_id):
             "engineering_assessment": engineering_assessment,
             "project_graph": project_graph,
             "agent_handoffs": agent_handoffs,
+            "project_state": project_state,
+            "project_state_summary": project_state.get("summary", {}),
         }
     )
 
@@ -221,6 +227,24 @@ def api_runtime():
 @app.get("/api/events/<int:run_id>")
 def api_events(run_id):
     return jsonify({"events": [dict(row) for row in list_events(run_id)]})
+
+
+def _project_state_for_run(run, handoff_history):
+    if run is None:
+        return {}
+    project = row_to_dict(get_project(run["project_id"])) or {}
+    payload = ProjectStateBuilder().build(
+        run_id=run["id"],
+        project_id=run["project_id"],
+        workspace_path=project.get("workspace_path", ""),
+        executor_actions=run["coder_output"],
+        stage_outputs={field: run[field] for field in STAGE_OUTPUT_FIELDS if run[field]},
+        handoff_history=handoff_history,
+    ).to_dict()
+    for section_name in ("actual_files", "planned_files", "merged_files"):
+        for item in payload.get(section_name, {}).get("files", []):
+            item["content_preview"] = ""
+    return payload
 
 
 if __name__ == "__main__":

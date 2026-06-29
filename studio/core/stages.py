@@ -629,6 +629,7 @@ def run_fix_stage(
     trigger_stage="tester_failed",
     static_review_output=None,
     rejected_actions=None,
+    project_state=None,
 ):
     from studio.config.settings import DEFAULT_MODELS
     from studio.core.failure_analysis import FailureAnalyzer
@@ -665,6 +666,7 @@ def run_fix_stage(
         tester_result,
         bug_report,
         execution_contract=execution_contract,
+        project_state=project_state,
     )
     repair_plan = RepairPlanner().plan(analysis, execution_contract=execution_contract)
     repair_plan_json = repair_plan.to_json()
