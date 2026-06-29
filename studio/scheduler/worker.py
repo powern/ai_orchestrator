@@ -2,6 +2,7 @@ import logging
 import time
 
 from studio.config.settings import DEFAULT_MODELS, SCHEDULER_POLL_INTERVAL_SECONDS
+from studio.contracts import append_handoff, build_agent_context, build_handoff
 from studio.core.llm_adapter import LLMAdapter
 from studio.core.run_pipeline import RunPipeline
 from studio.database.db import get_connection, init_db
@@ -50,6 +51,24 @@ def run_planner_stage(run_id, project):
         "planner",
         "Planner completed.",
         planner_output,
+    )
+    agent_context = build_agent_context(
+        run_id,
+        "planner",
+        previous_stage_outputs={"planner_output": planner_output},
+    )
+    append_handoff(
+        run_id,
+        "planner",
+        build_handoff(
+            producer="planner",
+            consumer="architect",
+            summary=planner_output,
+            agent_context=agent_context,
+            implementation_contract={"output": "development_backlog"},
+            recommended_focus=["architecture", "acceptance criteria", "test strategy"],
+        ),
+        workspace_path=project["workspace_path"],
     )
 
     return planner_output

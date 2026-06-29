@@ -152,6 +152,7 @@ def test_coder_retries_after_executor_schema_validation_failure(monkeypatch):
         "coder_retry",
         "coder_sanitized",
         "coder_completed",
+        "agent_handoff_recorded",
     ]
     assert "pipeline_failed" not in event_types
     assert "mkdir.path expected str, got dict" in adapter.prompts[-1]

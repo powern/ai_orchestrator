@@ -82,4 +82,17 @@ def init_db():
             )
         """)
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS agent_handoffs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id INTEGER NOT NULL,
+                stage TEXT NOT NULL,
+                producer TEXT NOT NULL,
+                consumer TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(run_id) REFERENCES runs(id)
+            )
+        """)
+
         conn.commit()

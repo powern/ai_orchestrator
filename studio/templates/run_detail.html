@@ -28,6 +28,9 @@
     <a href="#analyzer">Analyzer</a>
     <a href="#repair-plan">Repair Plan</a>
     <a href="#fix">Fix</a>
+    {% if agent_handoffs %}
+        <a href="#engineering-timeline">Engineering Timeline</a>
+    {% endif %}
     {% if engineering_assessment %}
         <a href="#engineering-assessment">Engineering Assessment</a>
     {% endif %}
@@ -45,6 +48,33 @@
     <p>Created: {{ run.created_at }}</p>
     <p>Updated: {{ run.updated_at }}</p>
 </section>
+
+{% if agent_handoffs %}
+<section id="engineering-timeline" class="run-summary">
+    <h3>Engineering Timeline</h3>
+    {% for handoff in agent_handoffs %}
+    <details class="stage-output" open>
+        <summary>
+            {{ handoff.stage }}: {{ handoff.producer }} → {{ handoff.consumer }}
+        </summary>
+        <p>Created: {{ handoff.created_at }}</p>
+        <p>Summary: {{ handoff.payload.summary }}</p>
+        <details class="stage-output">
+            <summary>Project Assumptions</summary>
+            <pre>{{ handoff.payload.project_assumptions }}</pre>
+        </details>
+        <details class="stage-output">
+            <summary>Implementation Contract</summary>
+            <pre>{{ handoff.payload.implementation_contract }}</pre>
+        </details>
+        <details class="stage-output">
+            <summary>Recommended Focus</summary>
+            <pre>{{ handoff.payload.recommended_focus }}</pre>
+        </details>
+    </details>
+    {% endfor %}
+</section>
+{% endif %}
 
 {% if engineering_assessment %}
 {% set decision = engineering_assessment.decision %}

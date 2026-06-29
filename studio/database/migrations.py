@@ -4,7 +4,7 @@ from studio.database.db import get_connection
 def migrate():
     with get_connection() as conn:
         conn.execute("""
-        CREATE TABLE IF NOT EXISTS run_events (
+            CREATE TABLE IF NOT EXISTS run_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
 
             run_id INTEGER NOT NULL,
@@ -22,6 +22,19 @@ def migrate():
             FOREIGN KEY(run_id)
                 REFERENCES runs(id)
         )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS agent_handoffs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id INTEGER NOT NULL,
+                stage TEXT NOT NULL,
+                producer TEXT NOT NULL,
+                consumer TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(run_id) REFERENCES runs(id)
+            )
         """)
 
         columns = [row["name"] for row in conn.execute("PRAGMA table_info(runs)").fetchall()]

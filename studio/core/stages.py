@@ -1,7 +1,13 @@
 import json
 
 from studio.config.settings import CODER_MAX_OUTPUT_RETRIES, CODER_MAX_SANITIZE_ATTEMPTS
-from studio.contracts import PROTOCOL_SUMMARY, ProtocolValidator, build_agent_context
+from studio.contracts import (
+    PROTOCOL_SUMMARY,
+    ProtocolValidator,
+    append_handoff,
+    build_agent_context,
+    build_handoff,
+)
 from studio.core.executor_schema import validate_executor_actions
 from studio.core.llm_adapter import LLMAdapter
 from studio.core.tester_result import StageTestResult
@@ -53,6 +59,31 @@ def record_protocol_violations(run_id, stage, violations):
         f"Agent Protocol reported {len(violations)} violation(s).",
         json.dumps([violation.to_dict() for violation in violations], ensure_ascii=False),
     )
+
+
+def record_agent_handoff(
+    run_id,
+    stage,
+    producer,
+    consumer,
+    summary,
+    agent_context=None,
+    implementation_contract=None,
+    known_risks=None,
+    recommended_focus=None,
+):
+    context = agent_context or build_agent_context(run_id, stage)
+    workspace_path = context.project.get("workspace_path") if hasattr(context, "project") else None
+    handoff = build_handoff(
+        producer=producer,
+        consumer=consumer,
+        summary=summary,
+        agent_context=context,
+        implementation_contract=implementation_contract,
+        known_risks=known_risks,
+        recommended_focus=recommended_focus,
+    )
+    return append_handoff(run_id, stage, handoff, workspace_path=workspace_path)
 
 
 def run_architect_placeholder(run_id, planner_output):
@@ -261,6 +292,16 @@ Generate executor actions now.
         ),
         normalized_output,
     )
+    record_agent_handoff(
+        run_id,
+        "coder",
+        "coder",
+        "executor",
+        normalized_output,
+        agent_context=agent_context,
+        implementation_contract={"output": "canonical_executor_actions"},
+        recommended_focus=["execute generated actions", "preserve original requirements"],
+    )
 
     return normalized_output
 
@@ -277,7 +318,7 @@ def ask_coder_retry(
         if invalid_sanitized_actions is not None
         else "not available"
     )
-    system_prompt = """
+    system_prompt = f"""
 You are the Coder Agent of AI Studio.
 
 Return ONLY valid Executor JSON.
@@ -427,6 +468,36 @@ def run_tester_stage(run_id, workspace_path):
                 "Repair Planner generated structured repair instructions.",
                 repair_plan_json,
             )
+            context = build_agent_context(
+                run_id,
+                "repair_planner",
+                workspace_path=workspace_path,
+                evidence_overrides={
+                    "tester": tester_result.to_dict(),
+                    "failure_analysis": analysis.to_dict(),
+                    "repair_plan": repair_plan.to_dict(),
+                },
+            )
+            record_agent_handoff(
+                run_id,
+                "failure_analyzer",
+                "failure_analyzer",
+                "repair_planner",
+                json.dumps(analysis.to_dict(), ensure_ascii=False, indent=2),
+                agent_context=context,
+                implementation_contract={"primary_target": analysis.primary_target},
+                known_risks=["root cause may span multiple files"],
+            )
+            record_agent_handoff(
+                run_id,
+                "repair_planner",
+                "repair_planner",
+                "fix",
+                repair_plan_json,
+                agent_context=context,
+                implementation_contract=repair_plan.to_dict(),
+                recommended_focus=repair_plan.repair_targets + repair_plan.secondary_targets,
+            )
 
             coder_output = get_stage_output(run_id, "coder_output") or ""
             executor_output = get_stage_output(run_id, "executor_output") or ""
@@ -460,6 +531,15 @@ def run_tester_stage(run_id, workspace_path):
             "Tester stage completed successfully.",
             result_text,
         )
+        record_agent_handoff(
+            run_id,
+            "tester",
+            "tester",
+            "runtime_readiness",
+            result_text,
+            agent_context=build_agent_context(run_id, "tester", workspace_path=workspace_path),
+            implementation_contract={"tests_passed": True},
+        )
     else:
         add_event(
             run_id,
@@ -467,6 +547,16 @@ def run_tester_stage(run_id, workspace_path):
             "tester",
             "Tester stage failed.",
             result_text,
+        )
+        record_agent_handoff(
+            run_id,
+            "tester",
+            "tester",
+            "failure_analyzer",
+            result_text,
+            agent_context=build_agent_context(run_id, "tester", workspace_path=workspace_path),
+            implementation_contract={"tests_passed": False},
+            known_risks=["test failure needs root cause analysis"],
         )
 
     return tester_result
@@ -592,6 +682,16 @@ Previous raw Fix Agent response:
         "Fix actions generated.",
         fix_output,
     )
+    record_agent_handoff(
+        run_id,
+        "fix",
+        "fix",
+        "static_reviewer",
+        fix_output,
+        agent_context=agent_context,
+        implementation_contract={"output": "canonical_executor_actions"},
+        recommended_focus=["review fix actions", "run repaired tests"],
+    )
 
     return {
         "output": fix_output,
@@ -630,6 +730,12 @@ def run_architect_stage(run_id, planner_output):
         "architect",
         "LLM Architect started.",
     )
+    agent_context = build_agent_context(
+        run_id,
+        "architect",
+        previous_stage_outputs={"planner_output": planner_output},
+    )
+    record_protocol_context(run_id, "architect", agent_context)
 
     system_prompt = """
 You are the Architect Agent of AI Studio.
@@ -663,6 +769,12 @@ Constraints:
 """
 
     user_prompt = f"""
+AgentContext:
+{agent_context.to_prompt_json()}
+
+Latest handoff:
+{json.dumps(agent_context.pipeline.get("latest_handoff"), ensure_ascii=False, indent=2)}
+
 Planner output:
 
 {planner_output}
@@ -686,6 +798,16 @@ Create the implementation architecture now.
         "architect",
         "LLM Architect completed.",
         architect_output,
+    )
+    record_agent_handoff(
+        run_id,
+        "architect",
+        "architect",
+        "coder",
+        architect_output,
+        agent_context=agent_context,
+        implementation_contract={"architecture": "files, functions, tests, constraints"},
+        recommended_focus=["follow file layout", "preserve package assumptions"],
     )
 
     return architect_output

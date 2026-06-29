@@ -1,6 +1,7 @@
 from flask import Flask, abort, jsonify, redirect, render_template, request, url_for
 
 from studio.config.settings import FLASK_HOST, FLASK_PORT
+from studio.contracts.handoff import load_handoff_history
 from studio.database.db import init_db
 from studio.database.migrations import migrate
 from studio.events.publisher import publish_run_event
@@ -140,6 +141,7 @@ def run_detail(run_id):
     next_run = get_next_run(run_id)
     events = list_events(run_id)
     engineering_assessment = get_latest_engineering_assessment(run_id)
+    agent_handoffs = load_handoff_history(run_id)
     return render_template(
         "run_detail.html",
         run=run,
@@ -149,6 +151,7 @@ def run_detail(run_id):
         next_run=next_run,
         events=events,
         engineering_assessment=engineering_assessment,
+        agent_handoffs=agent_handoffs,
     )
 
 
@@ -190,6 +193,7 @@ def api_run(run_id):
     runtime = get_project_runtime(run["project_id"])
     engineering_assessment = get_latest_engineering_assessment(run_id)
     project_graph = engineering_assessment.get("project_graph") if engineering_assessment else None
+    agent_handoffs = load_handoff_history(run_id)
     return jsonify(
         {
             "run": row_to_dict(run),
@@ -199,6 +203,7 @@ def api_run(run_id):
             "stage_outputs": {field: run[field] for field in STAGE_OUTPUT_FIELDS},
             "engineering_assessment": engineering_assessment,
             "project_graph": project_graph,
+            "agent_handoffs": agent_handoffs,
         }
     )
 

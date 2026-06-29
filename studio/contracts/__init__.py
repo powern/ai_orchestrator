@@ -4,6 +4,13 @@ from studio.contracts.agent_outputs import (
     FORBIDDEN_ALIASES,
     PROTOCOL_SUMMARY,
 )
+from studio.contracts.handoff import (
+    AgentHandoff,
+    append_handoff,
+    build_handoff,
+    load_handoff_history,
+    load_latest_handoff,
+)
 from studio.contracts.protocol_validator import (
     ProtocolValidator,
     ProtocolViolation,
@@ -11,10 +18,15 @@ from studio.contracts.protocol_validator import (
 
 __all__ = [
     "AgentContext",
+    "AgentHandoff",
     "CANONICAL_ACTIONS",
     "FORBIDDEN_ALIASES",
     "PROTOCOL_SUMMARY",
     "ProtocolValidator",
     "ProtocolViolation",
     "build_agent_context",
+    "append_handoff",
+    "build_handoff",
+    "load_handoff_history",
+    "load_latest_handoff",
 ]

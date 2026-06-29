@@ -3,6 +3,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
 
+from studio.contracts.handoff import load_handoff_history, load_latest_handoff
 from studio.core.workspace_observer import WorkspaceObserver
 from studio.services.engineering_service import get_latest_engineering_assessment
 from studio.services.event_service import list_events
@@ -95,6 +96,8 @@ def build_agent_context(
             "current_stage": current_stage,
             "previous_stage_outputs": outputs,
             "events": [dict(row) for row in list_events(run_id)] if run else [],
+            "latest_handoff": load_latest_handoff(run_id) if run else None,
+            "handoff_history": load_handoff_history(run_id) if run else [],
         },
         evidence=evidence,
         validation_evidence=evidence,
