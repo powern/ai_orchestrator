@@ -148,6 +148,7 @@ def test_coder_retries_after_executor_schema_validation_failure(monkeypatch):
     assert output is not None
     assert event_types == [
         "coder_started",
+        "agent_context_built",
         "coder_retry",
         "coder_sanitized",
         "coder_completed",

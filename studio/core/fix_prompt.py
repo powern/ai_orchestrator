@@ -159,6 +159,8 @@ class FixPromptBuilder:
         coder_raw_output: str | None = None,
         planner_output: str | None = None,
         architect_output: str | None = None,
+        agent_context_json: str | None = None,
+        protocol_summary: str | None = None,
     ) -> str:
         workspace_context = self._format_workspace_files(workspace_files or [])
         task_context = task_description or "Not available."
@@ -171,6 +173,8 @@ class FixPromptBuilder:
         coder_raw_context = coder_raw_output or "No raw coder output was available."
         planner_context = planner_output or "No planner output was available."
         architect_context = architect_output or "No architect output was available."
+        agent_context = agent_context_json or "No AgentContext was available."
+        protocol_context = protocol_summary or "No protocol summary was available."
         static_review_instructions = ""
 
         if trigger_stage == "static_review_failed":
@@ -191,6 +195,12 @@ The generated project failed its tests or static review.
 You must return ONLY Executor JSON actions that implement the repair plan.
 Do not explain anything.
 Do not use markdown.
+
+Agent Protocol:
+{protocol_context}
+
+AgentContext:
+{agent_context}
 
 Original task description:
 {task_context}

@@ -1,6 +1,7 @@
 import json
 
 from studio.config.settings import CODER_MAX_OUTPUT_RETRIES, CODER_MAX_SANITIZE_ATTEMPTS
+from studio.contracts import PROTOCOL_SUMMARY, ProtocolValidator, build_agent_context
 from studio.core.executor_schema import validate_executor_actions
 from studio.core.llm_adapter import LLMAdapter
 from studio.core.tester_result import StageTestResult
@@ -16,6 +17,41 @@ def add_event(run_id, event_type, stage=None, message="", payload=None):
         stage=stage,
         message=message,
         payload=payload,
+    )
+
+
+def record_protocol_context(run_id, stage, context):
+    add_event(
+        run_id,
+        "agent_context_built",
+        stage,
+        f"AgentContext built for {stage}.",
+    )
+    violations = ProtocolValidator().validate_agent_context(context, stage)
+    record_protocol_violations(run_id, stage, violations)
+
+
+def record_protocol_output(run_id, stage, output):
+    violations = ProtocolValidator().validate_agent_output(output, stage)
+    record_protocol_violations(run_id, stage, violations)
+
+
+def record_protocol_violations(run_id, stage, violations):
+    if not violations:
+        return
+    event_type = (
+        "agent_context_missing_required_field"
+        if any(violation.code.startswith("missing_") for violation in violations)
+        else "agent_output_forbidden_alias"
+        if any(violation.code == "forbidden_alias" for violation in violations)
+        else "agent_protocol_violation"
+    )
+    add_event(
+        run_id,
+        event_type,
+        stage,
+        f"Agent Protocol reported {len(violations)} violation(s).",
+        json.dumps([violation.to_dict() for violation in violations], ensure_ascii=False),
     )
 
 
@@ -55,8 +91,17 @@ def run_coder_placeholder(run_id, planner_output, architect_output):
         "coder",
         "LLM Coder started.",
     )
+    agent_context = build_agent_context(
+        run_id=run_id,
+        current_stage="coder",
+        previous_stage_outputs={
+            "planner_output": planner_output,
+            "architect_output": architect_output,
+        },
+    )
+    record_protocol_context(run_id, "coder", agent_context)
 
-    system_prompt = """
+    system_prompt = f"""
 You are the Coder Agent of AI Studio.
 
 You must generate ONLY valid JSON.
@@ -81,6 +126,9 @@ Safety rules:
 
 Prefer creating a minimal working Python project with tests.
 
+Agent Protocol:
+{PROTOCOL_SUMMARY}
+
 For simple Flask or visual smoke-test web apps:
 - Make the app manually runnable with python app/main.py when app/main.py exists.
 - Include if __name__ == "__main__": app.run(host="0.0.0.0", port=5000).
@@ -93,6 +141,9 @@ For simple Flask or visual smoke-test web apps:
 """
 
     user_prompt = f"""
+AgentContext:
+{agent_context.to_prompt_json()}
+
 Planner output:
 
 {planner_output}
@@ -112,6 +163,10 @@ Generate executor actions now.
         json_mode=True,
     )
     save_stage_output(run_id, "coder_raw_output", coder_raw_output)
+    try:
+        record_protocol_output(run_id, "coder", json.loads(coder_raw_output))
+    except json.JSONDecodeError:
+        pass
 
     sanitizer = ActionSanitizerAgent(
         adapter=adapter,
@@ -228,6 +283,9 @@ You are the Coder Agent of AI Studio.
 Return ONLY valid Executor JSON.
 Do not use markdown.
 Do not explain anything.
+
+Agent Protocol:
+{PROTOCOL_SUMMARY}
 """
 
     user_prompt = f"""
@@ -459,6 +517,24 @@ def run_fix_stage(
     save_stage_output(run_id, "repair_plan", repair_plan_json)
     context_builder = FixWorkspaceContextBuilder()
     workspace_files = context_builder.build(workspace_path, tester_result)
+    agent_context = build_agent_context(
+        run_id=run_id,
+        current_stage="fix",
+        workspace_path=workspace_path,
+        previous_stage_outputs={
+            "planner_output": planner_output,
+            "architect_output": architect_output,
+            "coder_output": coder_output,
+            "fix_output": get_stage_output(run_id, "fix_output"),
+        },
+        evidence_overrides={
+            "tester": tester_result.to_dict(),
+            "failure_analysis": analysis.to_dict(),
+            "repair_plan": repair_plan.to_dict(),
+            "static_review": static_review_output or {},
+        },
+    )
+    record_protocol_context(run_id, "fix", agent_context)
 
     fix_prompt = FixPromptBuilder().build(
         original_coder_output=coder_output,
@@ -475,6 +551,8 @@ def run_fix_stage(
         coder_raw_output=coder_raw_output,
         planner_output=planner_output,
         architect_output=architect_output,
+        agent_context_json=agent_context.to_prompt_json(),
+        protocol_summary=PROTOCOL_SUMMARY,
     )
 
     if previous_error is not None:
@@ -502,6 +580,10 @@ Previous raw Fix Agent response:
     )
 
     save_stage_output(run_id, "fix_raw_output", fix_output)
+    try:
+        record_protocol_output(run_id, "fix", json.loads(fix_output))
+    except json.JSONDecodeError:
+        pass
 
     add_event(
         run_id,
