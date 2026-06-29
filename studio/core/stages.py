@@ -175,6 +175,11 @@ For simple Flask or visual smoke-test web apps:
 AgentContext:
 {agent_context.to_prompt_json()}
 
+Decision collaboration:
+- Read latest_handoff and handoff_history before implementing.
+- Preserve protected_decisions unless new validation evidence makes them invalid.
+- Record implementation decisions, assumptions, and risks in the next handoff.
+
 Planner output:
 
 {planner_output}
@@ -297,9 +302,12 @@ Generate executor actions now.
         "coder",
         "coder",
         "executor",
-        normalized_output,
+        "Implementation plan converted to canonical Executor actions.",
         agent_context=agent_context,
-        implementation_contract={"output": "canonical_executor_actions"},
+        implementation_contract={
+            "output": "canonical_executor_actions",
+            "action_source": "coder",
+        },
         recommended_focus=["execute generated actions", "preserve original requirements"],
     )
 
@@ -483,17 +491,18 @@ def run_tester_stage(run_id, workspace_path):
                 "failure_analyzer",
                 "failure_analyzer",
                 "repair_planner",
-                json.dumps(analysis.to_dict(), ensure_ascii=False, indent=2),
+                "Failure Analyzer identified the most likely root cause.",
                 agent_context=context,
                 implementation_contract={"primary_target": analysis.primary_target},
                 known_risks=["root cause may span multiple files"],
+                recommended_focus=[analysis.primary_target or analysis.root_cause],
             )
             record_agent_handoff(
                 run_id,
                 "repair_planner",
                 "repair_planner",
                 "fix",
-                repair_plan_json,
+                "Repair Planner selected concrete repair targets.",
                 agent_context=context,
                 implementation_contract=repair_plan.to_dict(),
                 recommended_focus=repair_plan.repair_targets + repair_plan.secondary_targets,
@@ -536,9 +545,10 @@ def run_tester_stage(run_id, workspace_path):
             "tester",
             "tester",
             "runtime_readiness",
-            result_text,
+            "Tester verified the generated project behavior with pytest.",
             agent_context=build_agent_context(run_id, "tester", workspace_path=workspace_path),
             implementation_contract={"tests_passed": True},
+            recommended_focus=["runtime readiness", "manual run metadata"],
         )
     else:
         add_event(
@@ -553,10 +563,11 @@ def run_tester_stage(run_id, workspace_path):
             "tester",
             "tester",
             "failure_analyzer",
-            result_text,
+            "Tester observed failing validation that requires root cause analysis.",
             agent_context=build_agent_context(run_id, "tester", workspace_path=workspace_path),
             implementation_contract={"tests_passed": False},
             known_risks=["test failure needs root cause analysis"],
+            recommended_focus=["traceback", "workspace files", "project graph"],
         )
 
     return tester_result
@@ -687,9 +698,12 @@ Previous raw Fix Agent response:
         "fix",
         "fix",
         "static_reviewer",
-        fix_output,
+        "Fix Agent generated repair actions for the planned targets.",
         agent_context=agent_context,
-        implementation_contract={"output": "canonical_executor_actions"},
+        implementation_contract={
+            "output": "canonical_executor_actions",
+            "trigger_stage": trigger_stage,
+        },
         recommended_focus=["review fix actions", "run repaired tests"],
     )
 
@@ -772,7 +786,7 @@ Constraints:
 AgentContext:
 {agent_context.to_prompt_json()}
 
-Latest handoff:
+Latest Decision Handoff:
 {json.dumps(agent_context.pipeline.get("latest_handoff"), ensure_ascii=False, indent=2)}
 
 Planner output:
@@ -804,7 +818,7 @@ Create the implementation architecture now.
         "architect",
         "architect",
         "coder",
-        architect_output,
+        "Architect selected project structure and implementation boundaries.",
         agent_context=agent_context,
         implementation_contract={"architecture": "files, functions, tests, constraints"},
         recommended_focus=["follow file layout", "preserve package assumptions"],

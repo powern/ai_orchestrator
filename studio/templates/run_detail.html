@@ -58,10 +58,19 @@
             {{ handoff.stage }}: {{ handoff.producer }} → {{ handoff.consumer }}
         </summary>
         <p>Created: {{ handoff.created_at }}</p>
-        <p>Summary: {{ handoff.payload.summary }}</p>
+        <p>Summary: {{ handoff.payload.decision_record.summary }}</p>
+        <p>Confidence: {{ handoff.payload.decision_record.confidence }}</p>
+        <details class="stage-output">
+            <summary>Decisions</summary>
+            <pre>{{ handoff.payload.decision_record.decisions }}</pre>
+        </details>
+        <details class="stage-output">
+            <summary>Protected Decisions</summary>
+            <pre>{{ handoff.payload.decision_record.protected_decisions }}</pre>
+        </details>
         <details class="stage-output">
             <summary>Project Assumptions</summary>
-            <pre>{{ handoff.payload.project_assumptions }}</pre>
+            <pre>{{ handoff.payload.decision_record.assumptions }}</pre>
         </details>
         <details class="stage-output">
             <summary>Implementation Contract</summary>

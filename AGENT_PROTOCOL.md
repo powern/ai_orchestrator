@@ -68,6 +68,22 @@ Agents must not output:
 }
 ```
 
+## Decision Handoff
+
+Agent handoffs are decision records, not implementation logs. Source code belongs in workspace
+files and Executor actions. Handoffs should capture:
+
+- decisions made by the producing agent;
+- why those decisions were made;
+- assumptions that remain active;
+- protected decisions the next agent should preserve;
+- risks and open questions;
+- expected next agent and validation.
+
+Large code blocks, file contents, and raw Executor JSON should be summarized before persistence.
+The latest handoff is primary, while the full handoff history remains available as collective
+engineering memory.
+
 ## Executor Action Contract
 
 The canonical Executor JSON root is an array. Allowed actions:

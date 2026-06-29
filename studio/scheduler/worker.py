@@ -63,7 +63,7 @@ def run_planner_stage(run_id, project):
         build_handoff(
             producer="planner",
             consumer="architect",
-            summary=planner_output,
+            summary="Planner defined project goals, constraints, and success criteria.",
             agent_context=agent_context,
             implementation_contract={"output": "development_backlog"},
             recommended_focus=["architecture", "acceptance criteria", "test strategy"],

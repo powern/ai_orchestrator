@@ -44,6 +44,8 @@ def test_handoff_persists_to_database_workspace_and_events():
     event_types = [event["event_type"] for event in list_events(run_id)]
 
     assert latest["payload"]["producer"] == "planner"
+    assert latest["payload"]["decision_record"]["agent"] == "planner"
+    assert latest["payload"]["decision_record"]["expected_next_agent"] == "architect"
     assert history[0]["payload"]["consumer"] == "architect"
     assert artifact.exists()
     assert "agent_handoff_recorded" in event_types
@@ -88,6 +90,48 @@ def test_run_detail_and_api_expose_engineering_timeline():
     assert page.status_code == 200
     assert b"Engineering Timeline" in page.data
     assert api["agent_handoffs"][0]["producer"] == "planner"
+
+
+def test_handoff_summarizes_executor_json_as_decision_record():
+    setup_database()
+    project_id = create_project("Decision Handoff", "Create a small app.")
+    run_id = create_run(project_id)
+    context = build_agent_context(run_id, "coder")
+    raw_executor_json = (
+        '[{"action":"write_file","path":"app/main.py",'
+        '"content":"def main():\\n    return \\"secret code\\"\\n"}]'
+    )
+
+    handoff = build_handoff(
+        "coder",
+        "executor",
+        raw_executor_json,
+        context,
+        implementation_contract={"output": "canonical_executor_actions"},
+    )
+    payload = handoff.to_dict()
+
+    assert "secret code" not in payload["summary"]
+    assert "Produced canonical Executor action plan" in payload["summary"]
+    assert payload["decision_record"]["decisions"] == ["output: canonical_executor_actions"]
+    assert "original_user_request" in payload["decision_record"]["protected_decisions"]
+
+
+def test_handoff_filters_code_like_summary_lines():
+    setup_database()
+    project_id = create_project("Decision Filter", "Create a small app.")
+    run_id = create_run(project_id)
+    context = build_agent_context(run_id, "architect")
+
+    handoff = build_handoff(
+        "architect",
+        "coder",
+        "Use app as package root.\ndef main():\n    return 'implementation'\n",
+        context,
+    )
+
+    assert "def main" not in handoff.summary
+    assert "Use app as package root." in handoff.summary
 
 
 def test_handoff_table_exists_after_migration():
