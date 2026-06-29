@@ -4,6 +4,11 @@ from pathlib import Path
 from typing import Any
 
 from studio.contracts.execution import validate_execution_contract
+from studio.core.diagnostics import (
+    DiagnosticCaseBuilder,
+    HypothesisGenerator,
+    HypothesisVerifier,
+)
 from studio.core.fix_prompt import FixWorkspaceContextBuilder
 from studio.core.tester_result import StageTestResult
 
@@ -33,6 +38,10 @@ class FailureAnalysis:
     workspace_tree: str = ""
     dependency_graph: dict[str, list[str]] = field(default_factory=dict)
     execution_contract: dict[str, Any] = field(default_factory=dict)
+    diagnostic_case: dict[str, Any] = field(default_factory=dict)
+    evidence_pack: dict[str, Any] = field(default_factory=dict)
+    hypotheses: list[dict[str, Any]] = field(default_factory=list)
+    verified_diagnosis: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -49,6 +58,10 @@ class FailureAnalysis:
             "workspace_tree": self.workspace_tree,
             "dependency_graph": self.dependency_graph,
             "execution_contract": self.execution_contract,
+            "diagnostic_case": self.diagnostic_case,
+            "evidence_pack": self.evidence_pack,
+            "hypotheses": self.hypotheses,
+            "verified_diagnosis": self.verified_diagnosis,
         }
 
 
@@ -75,6 +88,17 @@ class FailureAnalyzer:
         attribute_module = self._attribute_error_module(message)
         traceback_files = self._traceback_files(workspace, output)
         dependency_graph = self._dependency_graph(workspace)
+        diagnostic_case = DiagnosticCaseBuilder().build(
+            workspace,
+            tester_result,
+            exception_type,
+            message,
+            traceback_files,
+            dependency_graph,
+            execution_contract=execution_contract,
+        )
+        hypotheses = HypothesisGenerator().generate(diagnostic_case)
+        verified_diagnosis = HypothesisVerifier().verify(diagnostic_case, hypotheses)
 
         root_cause = self._root_cause(
             workspace=workspace,
@@ -98,6 +122,15 @@ class FailureAnalyzer:
         )
         confidence = self._confidence(exception_type, root_cause)
 
+        if self._should_use_verified_diagnosis(verified_diagnosis.to_dict()):
+            diagnosis_payload = verified_diagnosis.to_dict()
+            root_cause = diagnosis_payload["root_cause"]
+            primary_target = diagnosis_payload["primary_target"]
+            affected_files = diagnosis_payload["repair_targets"]
+            failure_class = diagnosis_payload["failure_class"]
+            reason = diagnosis_payload["reason"]
+            confidence = diagnosis_payload["confidence"]
+
         return FailureAnalysis(
             exception_type=exception_type,
             message=message,
@@ -112,7 +145,20 @@ class FailureAnalyzer:
             workspace_tree=FixWorkspaceContextBuilder().build_tree(workspace),
             dependency_graph=dependency_graph,
             execution_contract=execution_contract or {},
+            diagnostic_case={
+                "failing_test_file": diagnostic_case.failing_test_file,
+                "failing_production_file": diagnostic_case.failing_production_file,
+                "previous_failure_signatures": diagnostic_case.previous_failure_signatures,
+            },
+            evidence_pack=diagnostic_case.evidence_pack(),
+            hypotheses=[hypothesis.to_dict() for hypothesis in hypotheses],
+            verified_diagnosis=verified_diagnosis.to_dict(),
         )
+
+    def _should_use_verified_diagnosis(self, diagnosis: dict[str, Any]) -> bool:
+        if diagnosis.get("confidence", 0) < 0.55:
+            return False
+        return diagnosis.get("diagnosis_id") == "production-export-mismatch"
 
     def _exception(self, output: str) -> tuple[str, str]:
         matches = EXCEPTION_PATTERN.findall(output)

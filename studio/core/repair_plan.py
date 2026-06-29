@@ -40,11 +40,22 @@ class RepairPlanner:
         execution_contract: dict[str, Any] | None = None,
     ) -> RepairPlan:
         contract = execution_contract or analysis.execution_contract
+        diagnosis = self._actionable_diagnosis(analysis.verified_diagnosis or {}, analysis)
         root_cause = analysis.root_cause or "unknown"
         repair_targets = []
         secondary_targets = []
 
-        if analysis.root_cause:
+        if diagnosis:
+            if diagnosis.get("confidence", 1.0) >= 0.55:
+                root_cause = diagnosis.get("root_cause") or root_cause
+            for target in diagnosis.get("repair_targets") or []:
+                if target.startswith("tests/"):
+                    if target not in secondary_targets:
+                        secondary_targets.append(target)
+                elif target not in repair_targets:
+                    repair_targets.append(target)
+
+        if analysis.root_cause and analysis.root_cause not in repair_targets:
             repair_targets.append(analysis.root_cause)
 
         for path in analysis.affected_files:
@@ -54,10 +65,14 @@ class RepairPlanner:
             elif path not in repair_targets and not self._looks_missing_module_placeholder(path):
                 repair_targets.append(path)
 
-        primary_target = analysis.primary_target or self._primary_target(
-            root_cause,
-            repair_targets,
-            secondary_targets,
+        primary_target = (
+            diagnosis.get("primary_target")
+            or analysis.primary_target
+            or self._primary_target(
+                root_cause,
+                repair_targets,
+                secondary_targets,
+            )
         )
 
         if (
@@ -73,12 +88,27 @@ class RepairPlanner:
                 if target not in repair_targets:
                     repair_targets.append(target)
 
+        if diagnosis and diagnosis.get("confidence", 1.0) < 0.55:
+            for target in analysis.affected_files:
+                if target.startswith("tests/"):
+                    if target not in secondary_targets:
+                        secondary_targets.append(target)
+                elif (
+                    target not in repair_targets
+                    and not self._looks_missing_module_placeholder(target)
+                ):
+                    repair_targets.append(target)
+
         return RepairPlan(
             root_cause=root_cause,
             primary_target=primary_target,
             repair_targets=repair_targets,
             secondary_targets=secondary_targets,
-            reason=analysis.reason,
+            reason=(
+                diagnosis.get("reason")
+                if diagnosis.get("confidence", 1.0) >= 0.55
+                else analysis.reason
+            ),
             project_execution_contract=contract,
         )
 
@@ -115,3 +145,14 @@ class RepairPlanner:
             parts = [part.strip("'\"") for part in run_command.split()]
             targets.extend(part for part in parts if part.endswith(".py"))
         return targets
+
+    def _actionable_diagnosis(
+        self,
+        diagnosis: dict[str, Any],
+        analysis: FailureAnalysis,
+    ) -> dict[str, Any]:
+        if diagnosis.get("diagnosis_id") == "production-export-mismatch":
+            return diagnosis
+        if diagnosis.get("confidence", 1.0) < 0.55 and analysis.failure_class == "UnknownFailure":
+            return diagnosis
+        return {}

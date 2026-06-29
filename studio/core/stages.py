@@ -477,6 +477,27 @@ def run_tester_stage(run_id, workspace_path):
             save_stage_output(run_id, "repair_plan", repair_plan_json)
             add_event(
                 run_id,
+                "diagnostic_case_built",
+                "failure_analyzer",
+                "Diagnostic case built from tester output and workspace evidence.",
+                json.dumps(analysis.diagnostic_case, ensure_ascii=False, indent=2),
+            )
+            add_event(
+                run_id,
+                "hypotheses_generated",
+                "failure_analyzer",
+                f"Generated {len(analysis.hypotheses)} diagnostic hypothesis/hypotheses.",
+                json.dumps(analysis.hypotheses, ensure_ascii=False, indent=2),
+            )
+            add_event(
+                run_id,
+                "verified_diagnosis_completed",
+                "failure_analyzer",
+                "Verified diagnosis selected from evidence-backed hypotheses.",
+                json.dumps(analysis.verified_diagnosis, ensure_ascii=False, indent=2),
+            )
+            add_event(
+                run_id,
                 "failure_analyzed",
                 "failure_analyzer",
                 "Failure Analyzer identified probable root cause.",
@@ -653,6 +674,27 @@ def run_fix_stage(
         json.dumps(analysis.to_dict(), ensure_ascii=False, indent=2),
     )
     save_stage_output(run_id, "repair_plan", repair_plan_json)
+    add_event(
+        run_id,
+        "diagnostic_case_built",
+        "failure_analyzer",
+        "Diagnostic case built from validation evidence.",
+        json.dumps(analysis.diagnostic_case, ensure_ascii=False, indent=2),
+    )
+    add_event(
+        run_id,
+        "hypotheses_generated",
+        "failure_analyzer",
+        f"Generated {len(analysis.hypotheses)} diagnostic hypothesis/hypotheses.",
+        json.dumps(analysis.hypotheses, ensure_ascii=False, indent=2),
+    )
+    add_event(
+        run_id,
+        "verified_diagnosis_completed",
+        "failure_analyzer",
+        "Verified diagnosis selected from evidence-backed hypotheses.",
+        json.dumps(analysis.verified_diagnosis, ensure_ascii=False, indent=2),
+    )
     context_builder = FixWorkspaceContextBuilder()
     workspace_files = context_builder.build(workspace_path, tester_result)
     agent_context = build_agent_context(
