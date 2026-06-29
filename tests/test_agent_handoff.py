@@ -92,6 +92,69 @@ def test_run_detail_and_api_expose_engineering_timeline():
     assert api["agent_handoffs"][0]["producer"] == "planner"
 
 
+def test_run_detail_renders_legacy_handoff_without_decision_record():
+    setup_database()
+    from studio.app import app
+
+    project_id = create_project("Legacy Handoff UI", "Create a small app.")
+    run_id = create_run(project_id)
+    legacy_payload = {
+        "producer": "architect",
+        "consumer": "coder",
+        "summary": "Legacy architecture summary.",
+        "implementation_contract": {"entrypoint": "app/main.py"},
+        "recommended_focus": ["tests"],
+    }
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO agent_handoffs
+            (
+                run_id,
+                stage,
+                producer,
+                consumer,
+                payload_json
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (run_id, "architect", "architect", "coder", __import__("json").dumps(legacy_payload)),
+        )
+        conn.commit()
+
+    response = app.test_client().get(f"/runs/{run_id}")
+
+    assert response.status_code == 200
+    assert b"Legacy handoff format" in response.data
+    assert b"Legacy architecture summary" in response.data
+
+
+def test_run_detail_renders_new_decision_record_handoff():
+    setup_database()
+    from studio.app import app
+
+    project_id = create_project("Decision Handoff UI", "Create a small app.")
+    run_id = create_run(project_id)
+    context = build_agent_context(run_id, "architect")
+    append_handoff(
+        run_id,
+        "architect",
+        build_handoff(
+            "architect",
+            "coder",
+            "Use app package root.",
+            context,
+            implementation_contract={"entrypoint": "app/main.py"},
+        ),
+    )
+
+    response = app.test_client().get(f"/runs/{run_id}")
+
+    assert response.status_code == 200
+    assert b"Protected Decisions" in response.data
+    assert b"Confidence:" in response.data
+
+
 def test_handoff_summarizes_executor_json_as_decision_record():
     setup_database()
     project_id = create_project("Decision Handoff", "Create a small app.")
@@ -113,8 +176,11 @@ def test_handoff_summarizes_executor_json_as_decision_record():
 
     assert "secret code" not in payload["summary"]
     assert "Produced canonical Executor action plan" in payload["summary"]
-    assert payload["decision_record"]["decisions"] == ["output: canonical_executor_actions"]
+    assert "output: canonical_executor_actions" in payload["decision_record"]["decisions"]
+    assert "generated_files: ['app/main.py']" in payload["decision_record"]["decisions"]
     assert "original_user_request" in payload["decision_record"]["protected_decisions"]
+    assert payload["implementation_contract"]["generated_files"] == ["app/main.py"]
+    assert payload["implementation_contract"]["run_command"] == "python app/main.py"
 
 
 def test_handoff_filters_code_like_summary_lines():
@@ -132,6 +198,74 @@ def test_handoff_filters_code_like_summary_lines():
 
     assert "def main" not in handoff.summary
     assert "Use app as package root." in handoff.summary
+
+
+def test_architect_decision_record_uses_project_graph_fields(tmp_path):
+    setup_database()
+    project_id = create_project("Architect Concrete", "Create a Flask app.")
+    run_id = create_run(project_id)
+    workspace = tmp_path
+    (workspace / "app").mkdir()
+    (workspace / "tests").mkdir()
+    (workspace / "app" / "__init__.py").write_text("")
+    (workspace / "app" / "main.py").write_text(
+        "from flask import Flask\n"
+        "app = Flask(__name__)\n"
+        "@app.route('/')\n"
+        "def index():\n"
+        "    return 'ok'\n"
+        "if __name__ == '__main__':\n"
+        "    app.run()\n",
+        encoding="utf-8",
+    )
+    (workspace / "tests" / "test_main.py").write_text("def test_ok():\n    assert True\n")
+    context = build_agent_context(run_id, "architect", workspace_path=str(workspace))
+
+    handoff = build_handoff(
+        "architect",
+        "coder",
+        "Architect selected Flask package structure.",
+        context,
+        implementation_contract={"dependency_strategy": "requirements.txt"},
+    )
+    payload = handoff.to_dict()
+
+    assert payload["decision_record"]["assumptions"]["package_root"] == "app"
+    assert payload["implementation_contract"]["framework"] == "flask"
+    assert payload["implementation_contract"]["entrypoint"] == "app/main.py"
+    assert payload["implementation_contract"]["route_contract"] == ["/"]
+    assert payload["implementation_contract"]["test_import_contract"] == "from app.main import app"
+
+
+def test_repair_and_fix_decision_records_include_targets_and_preservation():
+    setup_database()
+    project_id = create_project("Repair Concrete", "Create a calculator.")
+    run_id = create_run(project_id)
+    context = build_agent_context(run_id, "repair_planner")
+
+    repair = build_handoff(
+        "repair_planner",
+        "fix",
+        "Repair Planner selected concrete repair targets.",
+        context,
+        implementation_contract={
+            "repair_targets": ["app/main.py"],
+            "secondary_targets": ["tests/test_main.py"],
+            "test_modification_policy": "Modify tests only when tests are wrong.",
+        },
+    ).to_dict()
+    fix = build_handoff(
+        "fix",
+        "static_reviewer",
+        '[{"action":"write_file","path":"app/main.py","content":"def main():\\n    return 1\\n"}]',
+        context,
+        implementation_contract={"original_requirements_preserved": True},
+    ).to_dict()
+
+    assert "repair_targets: ['app/main.py']" in repair["decision_record"]["decisions"]
+    assert "test_modification_policy" in "\n".join(repair["decision_record"]["decisions"])
+    assert fix["implementation_contract"]["changed_files"] == ["app/main.py"]
+    assert "original_requirements_preserved: True" in fix["decision_record"]["decisions"]
 
 
 def test_handoff_table_exists_after_migration():

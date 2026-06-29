@@ -53,25 +53,34 @@
 <section id="engineering-timeline" class="run-summary">
     <h3>Engineering Timeline</h3>
     {% for handoff in agent_handoffs %}
+    {% set decision_record = handoff.payload.decision_record if handoff.payload.decision_record is defined else none %}
     <details class="stage-output" open>
         <summary>
             {{ handoff.stage }}: {{ handoff.producer }} → {{ handoff.consumer }}
         </summary>
         <p>Created: {{ handoff.created_at }}</p>
-        <p>Summary: {{ handoff.payload.decision_record.summary }}</p>
-        <p>Confidence: {{ handoff.payload.decision_record.confidence }}</p>
+        <p>Summary: {{ decision_record.summary if decision_record else handoff.payload.summary }}</p>
+        <p>Confidence: {{ decision_record.confidence if decision_record else 'legacy' }}</p>
+        {% if decision_record %}
         <details class="stage-output">
             <summary>Decisions</summary>
-            <pre>{{ handoff.payload.decision_record.decisions }}</pre>
+            <pre>{{ decision_record.decisions }}</pre>
         </details>
         <details class="stage-output">
             <summary>Protected Decisions</summary>
-            <pre>{{ handoff.payload.decision_record.protected_decisions }}</pre>
+            <pre>{{ decision_record.protected_decisions }}</pre>
         </details>
         <details class="stage-output">
             <summary>Project Assumptions</summary>
-            <pre>{{ handoff.payload.decision_record.assumptions }}</pre>
+            <pre>{{ decision_record.assumptions }}</pre>
         </details>
+        {% else %}
+        <p>Legacy handoff format.</p>
+        <details class="stage-output">
+            <summary>Project Assumptions</summary>
+            <pre>{{ handoff.payload.project_assumptions or {} }}</pre>
+        </details>
+        {% endif %}
         <details class="stage-output">
             <summary>Implementation Contract</summary>
             <pre>{{ handoff.payload.implementation_contract }}</pre>

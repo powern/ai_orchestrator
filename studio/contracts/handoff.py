@@ -93,11 +93,20 @@ def build_handoff(
     context = agent_context.to_dict() if hasattr(agent_context, "to_dict") else agent_context or {}
     task = context.get("task", {})
     project = context.get("project", {})
-    graph_summary = project.get("project_graph", {}).get("summary", {})
+    project_graph = project.get("project_graph", {})
+    graph_summary = project_graph.get("summary", {})
     assumptions = {
         "project_types": graph_summary.get("project_types", []),
         "workspace_path": project.get("workspace_path", ""),
     }
+    assumptions.update(_assumptions_from_graph(project_graph))
+    assumptions.update(_assumptions_from_summary(summary))
+    concrete_contract = _compact_contract(
+        implementation_contract or {},
+        summary,
+        project_graph,
+        producer,
+    )
     decision_summary = _decision_summary(summary)
     effective_risks = known_risks or []
     effective_focus = recommended_focus or _focus_from_summary(summary)
@@ -109,7 +118,7 @@ def build_handoff(
     decision_record = DecisionRecord(
         agent=producer,
         summary=decision_summary,
-        decisions=decisions or _decisions_from_contract(implementation_contract or {}),
+        decisions=decisions or _decisions_from_contract(concrete_contract),
         protected_decisions=effective_protected,
         assumptions=assumptions,
         risks=effective_risks,
@@ -123,7 +132,7 @@ def build_handoff(
         summary=decision_summary,
         project_assumptions=assumptions,
         non_negotiable_requirements=task.get("non_negotiable_requirements", []),
-        implementation_contract=implementation_contract or {},
+        implementation_contract=concrete_contract,
         known_risks=effective_risks,
         recommended_focus=effective_focus,
         do_not_change=do_not_change or effective_protected,
@@ -282,6 +291,146 @@ def _executor_action_summary(text: str) -> str | None:
         f"Produced canonical Executor action plan ({action_text}). "
         f"Target files: {paths or 'none'}."
     )
+
+
+def _compact_contract(
+    contract: dict[str, Any],
+    summary: str,
+    project_graph: dict[str, Any],
+    producer: str,
+) -> dict[str, Any]:
+    compact = dict(contract)
+    compact.update(_contract_from_graph(project_graph))
+    compact.update(_contract_from_executor_actions(summary, producer))
+    return {key: value for key, value in compact.items() if value not in (None, [], {}, "")}
+
+
+def _contract_from_graph(project_graph: dict[str, Any]) -> dict[str, Any]:
+    if not project_graph:
+        return {}
+    entrypoints = project_graph.get("entrypoints", [])
+    routes = project_graph.get("routes", [])
+    dependencies = project_graph.get("dependencies", [])
+    tests = project_graph.get("tests", [])
+    modules = project_graph.get("modules", [])
+    contract = {
+        "framework": _framework_from_graph(project_graph),
+        "package_root": _package_root(project_graph),
+        "entrypoint": entrypoints[0]["path"] if entrypoints else None,
+        "run_command": f"python {entrypoints[0]['path']}" if entrypoints else None,
+        "test_command": "pytest -q" if tests else None,
+        "route_contract": [route["path"] for route in routes],
+        "dependency_files": [dependency.get("source") for dependency in dependencies],
+        "modules": [module.get("path") for module in modules],
+        "test_files": [test.get("path") for test in tests],
+    }
+    if contract["framework"] == "flask" and entrypoints:
+        module = entrypoints[0]["module"]
+        contract["flask_app_symbol"] = f"{module}.app"
+        contract["test_import_contract"] = f"from {module} import app"
+    return contract
+
+
+def _contract_from_executor_actions(summary: str, producer: str) -> dict[str, Any]:
+    try:
+        actions = json.loads(summary)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(actions, list):
+        return {}
+    write_paths = [
+        action.get("path")
+        for action in actions
+        if isinstance(action, dict)
+        and action.get("action") == "write_file"
+        and action.get("path")
+    ]
+    run_commands = [
+        action.get("command")
+        for action in actions
+        if isinstance(action, dict)
+        and action.get("action") == "run"
+        and action.get("command")
+    ]
+    contract = {
+        "generated_files": write_paths,
+        "changed_files": write_paths if producer == "fix" else [],
+        "dependency_files": [path for path in write_paths if _is_dependency_file(path)],
+        "runtime_entrypoints": [
+            path for path in write_paths if path in {"app/main.py", "main.py", "app.py"}
+        ],
+        "run_command": _first_runtime_command(run_commands, write_paths),
+        "test_command": _first_test_command(run_commands)
+        or ("pytest -q" if any(path.startswith("tests/") for path in write_paths) else None),
+    }
+    return contract
+
+
+def _assumptions_from_graph(project_graph: dict[str, Any]) -> dict[str, Any]:
+    if not project_graph:
+        return {}
+    return {
+        "framework": _framework_from_graph(project_graph),
+        "package_root": _package_root(project_graph),
+    }
+
+
+def _assumptions_from_summary(summary: str) -> dict[str, Any]:
+    try:
+        actions = json.loads(summary)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(actions, list):
+        return {}
+    write_paths = [
+        action.get("path")
+        for action in actions
+        if isinstance(action, dict)
+        and action.get("action") == "write_file"
+        and action.get("path")
+    ]
+    roots = sorted({path.split("/", 1)[0] for path in write_paths if "/" in path})
+    return {"package_root": "app"} if "app" in roots else {}
+
+
+def _framework_from_graph(project_graph: dict[str, Any]) -> str | None:
+    project_types = project_graph.get("summary", {}).get("project_types", [])
+    if "flask" in project_types:
+        return "flask"
+    if "fastapi" in project_types:
+        return "fastapi"
+    if "django" in project_types:
+        return "django"
+    return None
+
+
+def _package_root(project_graph: dict[str, Any]) -> str | None:
+    packages = project_graph.get("packages", [])
+    package_names = [package.get("name") for package in packages]
+    if "app" in package_names:
+        return "app"
+    return package_names[0] if package_names else None
+
+
+def _is_dependency_file(path: str) -> bool:
+    return path in {"requirements.txt", "requirements-dev.txt", "pyproject.toml"}
+
+
+def _first_runtime_command(commands: list[str], write_paths: list[str]) -> str | None:
+    for command in commands:
+        if command.startswith("python "):
+            return command
+    for path in ("app/main.py", "app.py", "main.py"):
+        if path in write_paths:
+            return f"python {path}"
+    return None
+
+
+def _first_test_command(commands: list[str]) -> str | None:
+    for command in commands:
+        if "pytest" in command:
+            return command
+    return None
 
 
 def _looks_like_implementation_line(line: str) -> bool:
