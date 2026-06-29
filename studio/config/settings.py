@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -31,6 +32,7 @@ CODER_MAX_SANITIZE_ATTEMPTS = 2
 CODER_MAX_OUTPUT_RETRIES = 3
 FIX_MAX_SANITIZE_ATTEMPTS = 2
 FIX_MAX_OUTPUT_RETRIES = 2
+ENGINEERING_SHADOW_ENABLED = os.environ.get("AI_ORCHESTRATOR_ENGINEERING_SHADOW") == "1"
 
 STAGE_PROGRESS = {
     "queued": 0,

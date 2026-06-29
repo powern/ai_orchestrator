@@ -22,6 +22,7 @@ from studio.database.db import get_connection
 from studio.events.publisher import publish_run_event
 from studio.reviewer.static_agent import StaticReviewerAgent
 from studio.sanitizer.agent import ActionSanitizerAgent
+from studio.services.engineering_service import record_engineering_shadow_assessment
 from studio.services.run_service import (
     save_stage_output,
     update_run_status,
@@ -247,6 +248,12 @@ class RunPipeline:
         self.planner_fn = planner_fn
 
     def execute(self, run_id, project):
+        def maybe_record_engineering_shadow():
+            try:
+                record_engineering_shadow_assessment(run_id, project)
+            except Exception:
+                return None
+
         project_id = get_project_id(project) or get_project_id_for_run(run_id)
         planner_output = self.planner_fn(run_id, project)
 
@@ -262,6 +269,7 @@ class RunPipeline:
         )
 
         if coder_output is None:
+            maybe_record_engineering_shadow()
             return
 
         static_review = StaticReviewerAgent().review(
@@ -332,6 +340,7 @@ class RunPipeline:
                 rejected_actions=coder_output,
             )
             if sanitized_fix is None:
+                maybe_record_engineering_shadow()
                 return
             actions, coder_output = sanitized_fix
 
@@ -378,6 +387,7 @@ class RunPipeline:
                     after_fix_output,
                 )
 
+                maybe_record_engineering_shadow()
                 return
 
         run_executor_stage(
@@ -399,6 +409,7 @@ class RunPipeline:
         if tester_result.success:
             readiness_ok, _ = run_runtime_readiness_stage(run_id, project["workspace_path"])
             if not readiness_ok:
+                maybe_record_engineering_shadow()
                 return
 
             update_run_status(
@@ -416,6 +427,7 @@ class RunPipeline:
                 "Run completed after tester stage.",
             )
 
+            maybe_record_engineering_shadow()
             return
 
         fix_result = run_fix_stage(
@@ -433,6 +445,7 @@ class RunPipeline:
             tester_result,
         )
         if sanitized_fix is None:
+            maybe_record_engineering_shadow()
             return
         actions, coder_output = sanitized_fix
 
@@ -462,6 +475,7 @@ class RunPipeline:
                 str(static_review.findings),
             )
 
+            maybe_record_engineering_shadow()
             return
 
         run_executor_stage(
@@ -483,6 +497,7 @@ class RunPipeline:
         if tester_result.success:
             readiness_ok, _ = run_runtime_readiness_stage(run_id, project["workspace_path"])
             if not readiness_ok:
+                maybe_record_engineering_shadow()
                 return
 
             update_run_status(
@@ -500,6 +515,7 @@ class RunPipeline:
                 "Run completed after automatic fix.",
             )
 
+            maybe_record_engineering_shadow()
             return
 
         update_run_status(
@@ -516,3 +532,4 @@ class RunPipeline:
             "tester_failed",
             "Run failed after automatic fix.",
         )
+        maybe_record_engineering_shadow()

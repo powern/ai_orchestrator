@@ -28,6 +28,9 @@
     <a href="#analyzer">Analyzer</a>
     <a href="#repair-plan">Repair Plan</a>
     <a href="#fix">Fix</a>
+    {% if engineering_assessment %}
+        <a href="#engineering-assessment">Engineering Assessment</a>
+    {% endif %}
 </p>
 
 <section class="run-summary">
@@ -42,6 +45,36 @@
     <p>Created: {{ run.created_at }}</p>
     <p>Updated: {{ run.updated_at }}</p>
 </section>
+
+{% if engineering_assessment %}
+{% set decision = engineering_assessment.decision %}
+{% set confidence = engineering_assessment.confidence %}
+{% set observation = engineering_assessment.observation %}
+<section id="engineering-assessment" class="run-summary">
+    <h3>Engineering Assessment</h3>
+    <p>Confidence: {{ confidence.score }}</p>
+    <p>Should Continue: {{ 'yes' if decision.should_continue else 'no' }}</p>
+    <p>Next Objective: {{ decision.next_objective }}</p>
+    <p>Target Area: {{ decision.target_area }}</p>
+    <p>Expected Validation: {{ decision.expected_validation }}</p>
+    <p>
+        Workspace:
+        {{ observation.source_files.count if observation.source_files else 0 }} source files,
+        {{ observation.tests.count if observation.tests else 0 }} tests,
+        {{ observation.dependency_files|length }} dependency files,
+        {{ observation.run_metadata_files|length }} run metadata files
+    </p>
+    <details class="stage-output">
+        <summary>Reasons</summary>
+        <pre>{% for reason in confidence.reasons %}{{ reason }}
+{% endfor %}</pre>
+    </details>
+    <details class="stage-output">
+        <summary>Workspace Summary</summary>
+        <pre>{{ observation }}</pre>
+    </details>
+</section>
+{% endif %}
 
 {% set output_sections = [
     ('planner', 'Planner Output', run.planner_output),

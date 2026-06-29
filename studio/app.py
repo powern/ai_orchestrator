@@ -4,6 +4,7 @@ from studio.config.settings import FLASK_HOST, FLASK_PORT
 from studio.database.db import init_db
 from studio.database.migrations import migrate
 from studio.events.publisher import publish_run_event
+from studio.services.engineering_service import get_latest_engineering_assessment
 from studio.services.event_service import list_events, list_latest_events
 from studio.services.project_service import (
     create_project,
@@ -138,6 +139,7 @@ def run_detail(run_id):
     previous_run = get_previous_run(run_id)
     next_run = get_next_run(run_id)
     events = list_events(run_id)
+    engineering_assessment = get_latest_engineering_assessment(run_id)
     return render_template(
         "run_detail.html",
         run=run,
@@ -146,6 +148,7 @@ def run_detail(run_id):
         previous_run=previous_run,
         next_run=next_run,
         events=events,
+        engineering_assessment=engineering_assessment,
     )
 
 
@@ -185,6 +188,7 @@ def api_run(run_id):
 
     project = get_project(run["project_id"])
     runtime = get_project_runtime(run["project_id"])
+    engineering_assessment = get_latest_engineering_assessment(run_id)
     return jsonify(
         {
             "run": row_to_dict(run),
@@ -192,6 +196,7 @@ def api_run(run_id):
             "runtime": row_to_dict(runtime),
             "events": [dict(row) for row in list_events(run_id)],
             "stage_outputs": {field: run[field] for field in STAGE_OUTPUT_FIELDS},
+            "engineering_assessment": engineering_assessment,
         }
     )
 

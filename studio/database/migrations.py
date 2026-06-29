@@ -78,4 +78,65 @@ def migrate():
             )
         """)
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS engineering_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                run_id INTEGER,
+                status TEXT NOT NULL DEFAULT 'observed',
+                confidence REAL,
+                proposed_objective TEXT,
+                should_continue INTEGER NOT NULL DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(project_id) REFERENCES projects(id),
+                FOREIGN KEY(run_id) REFERENCES runs(id)
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS engineering_cycles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                cycle_number INTEGER NOT NULL,
+                objective TEXT,
+                status TEXT NOT NULL DEFAULT 'proposed',
+                confidence_before REAL,
+                confidence_after REAL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(session_id) REFERENCES engineering_sessions(id)
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS project_state_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                run_id INTEGER,
+                payload_json TEXT NOT NULL,
+                confidence_json TEXT,
+                decision_json TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(session_id) REFERENCES engineering_sessions(id),
+                FOREIGN KEY(run_id) REFERENCES runs(id)
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS validation_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                cycle_id INTEGER,
+                run_id INTEGER,
+                kind TEXT NOT NULL,
+                status TEXT NOT NULL,
+                payload_json TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(session_id) REFERENCES engineering_sessions(id),
+                FOREIGN KEY(cycle_id) REFERENCES engineering_cycles(id),
+                FOREIGN KEY(run_id) REFERENCES runs(id)
+            )
+        """)
+
         conn.commit()
