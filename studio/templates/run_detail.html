@@ -50,6 +50,7 @@
 {% set decision = engineering_assessment.decision %}
 {% set confidence = engineering_assessment.confidence %}
 {% set observation = engineering_assessment.observation %}
+{% set project_graph = engineering_assessment.project_graph %}
 <section id="engineering-assessment" class="run-summary">
     <h3>Engineering Assessment</h3>
     <p>Confidence: {{ confidence.score }}</p>
@@ -74,6 +75,42 @@
         <pre>{{ observation }}</pre>
     </details>
 </section>
+
+{% if project_graph %}
+<details id="project-knowledge" class="stage-output" open>
+    <summary>Project Knowledge</summary>
+    {% set graph_summary = project_graph.summary %}
+    <p>Project Types: {{ graph_summary.project_types|join(', ') if graph_summary else 'empty' }}</p>
+    <p>Packages: {{ graph_summary.package_count if graph_summary else 0 }}</p>
+    <p>Modules: {{ graph_summary.module_count if graph_summary else 0 }}</p>
+    <p>Entrypoints: {{ graph_summary.entrypoint_count if graph_summary else 0 }}</p>
+    <p>Routes: {{ graph_summary.route_count if graph_summary else 0 }}</p>
+    <p>Dependencies: {{ graph_summary.dependency_count if graph_summary else 0 }}</p>
+    <p>Tests: {{ graph_summary.test_count if graph_summary else 0 }}</p>
+    <p>Documents: {{ graph_summary.document_count if graph_summary else 0 }}</p>
+    <p>
+        Route Coverage:
+        {{ graph_summary.covered_routes if graph_summary else 0 }} covered,
+        {{ graph_summary.uncovered_routes if graph_summary else 0 }} uncovered
+    </p>
+    <details class="stage-output">
+        <summary>Graph Summary</summary>
+        <pre>{{ project_graph.summary }}</pre>
+    </details>
+    <details class="stage-output">
+        <summary>Entrypoints</summary>
+        <pre>{{ project_graph.entrypoints }}</pre>
+    </details>
+    <details class="stage-output">
+        <summary>Routes</summary>
+        <pre>{{ project_graph.routes }}</pre>
+    </details>
+    <details class="stage-output">
+        <summary>Imports</summary>
+        <pre>{{ project_graph.import_graph }}</pre>
+    </details>
+</details>
+{% endif %}
 {% endif %}
 
 {% set output_sections = [

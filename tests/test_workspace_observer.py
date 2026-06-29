@@ -33,6 +33,8 @@ def test_workspace_observer_summarizes_project_and_excludes_caches(tmp_path):
     assert "pytest.ini" in observation["validation_artifacts"]
     assert "python" in observation["project_type_hints"]
     assert "flask" in observation["project_type_hints"]
+    assert observation["project_graph"]["summary"]["module_count"] == 1
+    assert observation["project_graph"]["summary"]["test_count"] == 1
     assert "__pycache__" not in tree
     assert ".git" not in tree
     assert ".venv" not in tree

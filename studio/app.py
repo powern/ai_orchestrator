@@ -189,6 +189,7 @@ def api_run(run_id):
     project = get_project(run["project_id"])
     runtime = get_project_runtime(run["project_id"])
     engineering_assessment = get_latest_engineering_assessment(run_id)
+    project_graph = engineering_assessment.get("project_graph") if engineering_assessment else None
     return jsonify(
         {
             "run": row_to_dict(run),
@@ -197,6 +198,7 @@ def api_run(run_id):
             "events": [dict(row) for row in list_events(run_id)],
             "stage_outputs": {field: run[field] for field in STAGE_OUTPUT_FIELDS},
             "engineering_assessment": engineering_assessment,
+            "project_graph": project_graph,
         }
     )
 

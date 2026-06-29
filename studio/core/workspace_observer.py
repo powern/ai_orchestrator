@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from studio.core.project_knowledge import ProjectKnowledgeGraphBuilder
+
 EXCLUDED_DIRS = {
     ".git",
     ".mypy_cache",
@@ -46,6 +48,7 @@ class WorkspaceObserver:
     def observe(self, workspace_path: str | Path) -> dict:
         workspace = Path(workspace_path)
         if not workspace.exists():
+            empty_graph = ProjectKnowledgeGraphBuilder().empty()
             return {
                 "exists": False,
                 "workspace_tree": [],
@@ -56,6 +59,7 @@ class WorkspaceObserver:
                 "ignored_files_summary": {"count": 0, "examples": []},
                 "project_type_hints": [],
                 "validation_artifacts": [],
+                "project_graph": empty_graph,
             }
 
         tree: list[str] = []
@@ -93,6 +97,15 @@ class WorkspaceObserver:
             if relative in {"pytest.ini", ".flake8"}:
                 validation_artifacts.append(relative)
 
+        project_graph = ProjectKnowledgeGraphBuilder().build(
+            workspace=workspace,
+            source_files=source_files[:MAX_SUMMARY_FILES],
+            test_files=test_files[:MAX_SUMMARY_FILES],
+            dependency_files=dependency_files[:MAX_SUMMARY_FILES],
+            metadata_files=metadata_files[:MAX_SUMMARY_FILES],
+            validation_artifacts=validation_artifacts[:MAX_SUMMARY_FILES],
+        )
+
         return {
             "exists": True,
             "workspace_tree": tree,
@@ -110,12 +123,9 @@ class WorkspaceObserver:
                 "count": ignored_count,
                 "examples": ignored_examples,
             },
-            "project_type_hints": self._project_type_hints(
-                workspace,
-                source_files,
-                dependency_files,
-            ),
+            "project_type_hints": project_graph["summary"]["project_types"],
             "validation_artifacts": validation_artifacts[:MAX_SUMMARY_FILES],
+            "project_graph": project_graph,
         }
 
     def _is_large(self, path: Path) -> bool:

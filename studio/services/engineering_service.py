@@ -231,6 +231,7 @@ def get_latest_engineering_assessment(run_id: int) -> dict | None:
             "created_at": row["created_at"],
         },
         "observation": _loads(row["payload_json"]),
+        "project_graph": _loads(row["payload_json"]).get("project_graph", {}),
         "confidence": _loads(row["confidence_json"]),
         "decision": _loads(row["decision_json"]),
     }

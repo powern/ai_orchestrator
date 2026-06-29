@@ -27,6 +27,7 @@ class ConfidenceAssessor:
             "events": [event.get("event_type") for event in events],
             "has_tests": observation.get("tests", {}).get("count", 0) > 0,
             "has_run_metadata": bool(observation.get("run_metadata_files")),
+            "project_graph_summary": observation.get("project_graph", {}).get("summary", {}),
         }
 
         event_types = set(evidence["events"])
@@ -123,6 +124,11 @@ class EngineeringDecisionModel:
             target_area = "tests"
             expected_validation = "Behavioral tests exist and pass."
             should_continue = True
+        elif self._has_uncovered_routes(observation):
+            objective = "Improve behavior coverage for uncovered web routes."
+            target_area = "tests"
+            expected_validation = "Each detected route is validated by tests."
+            should_continue = True
         elif not observation.get("run_metadata_files"):
             objective = "Add manual run metadata for the generated project."
             target_area = "documentation"
@@ -142,3 +148,7 @@ class EngineeringDecisionModel:
             "confidence_before": confidence.score,
             "should_continue": should_continue,
         }
+
+    def _has_uncovered_routes(self, observation: dict) -> bool:
+        summary = observation.get("project_graph", {}).get("summary", {})
+        return summary.get("uncovered_routes", 0) > 0

@@ -57,6 +57,7 @@ def test_shadow_assessment_persists_snapshot_and_events(monkeypatch):
     assert count_rows("validation_results") == validation_before + 1
     assert latest["decision"]["should_continue"] is False
     assert latest["observation"]["source_files"]["files"] == ["app/main.py"]
+    assert latest["project_graph"]["summary"]["module_count"] == 1
 
     with get_connection() as conn:
         event_types = [
@@ -84,7 +85,27 @@ def test_run_detail_displays_engineering_assessment(monkeypatch):
 
     assert response.status_code == 200
     assert b"Engineering Assessment" in response.data
+    assert b"Project Knowledge" in response.data
     assert b"Next Objective" in response.data
+
+
+def test_run_api_exposes_project_graph(monkeypatch):
+    setup_database()
+    monkeypatch.setenv("AI_ORCHESTRATOR_ENGINEERING_SHADOW", "1")
+    from studio.app import app
+
+    project_id = create_project("API Graph", "Python app")
+    project = dict(get_project(project_id))
+    run_id = create_run(project_id)
+    update_run_status(run_id, "completed", "tester_completed", "done")
+    record_engineering_shadow_assessment(run_id, project)
+
+    response = app.test_client().get(f"/api/runs/{run_id}")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["project_graph"]["schema_version"] == 1
+    assert payload["engineering_assessment"]["project_graph"]["schema_version"] == 1
 
 
 def test_shadow_off_pipeline_does_not_store_engineering_assessment(monkeypatch, tmp_path):
