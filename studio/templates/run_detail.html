@@ -51,6 +51,7 @@
 
 {% if project_state %}
 {% set state_summary = project_state.summary %}
+{% set project_specification = project_state.project_specification %}
 <section id="project-state" class="run-summary">
     <h3>Project State</h3>
     <p>Actual Files: {{ state_summary.actual_file_count }}</p>
@@ -64,6 +65,19 @@
     <p>Routes: {{ state_summary.routes|join(', ') }}</p>
     <p>Test Roots: {{ state_summary.test_roots|join(', ') }}</p>
 </section>
+{% if project_specification %}
+<section id="project-specification" class="run-summary">
+    <h3>Project Specification</h3>
+    <p>Project Type: {{ project_specification.project_type }}</p>
+    <p>Language: {{ project_specification.language }}</p>
+    <p>Framework: {{ project_specification.framework }}</p>
+    <p>Runtime: {{ project_specification.runtime.kind }}</p>
+    <p>Confidence: {{ project_specification.confidence }}</p>
+    <p>Features: {{ project_specification.features }}</p>
+    <p>Entities: {{ project_specification.entities }}</p>
+    <p>Acceptance Criteria: {{ project_specification.acceptance_criteria }}</p>
+</section>
+{% endif %}
 {% endif %}
 
 {% if agent_handoffs %}

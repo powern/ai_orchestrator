@@ -18,6 +18,7 @@ Use these names across prompts, context, persistence, and validation:
 - `original_user_request`
 - `non_negotiable_requirements`
 - `acceptance_criteria`
+- `project_specification`
 - `project_graph`
 - `project_state`
 - `project_execution_contract`
@@ -45,7 +46,8 @@ Agents must not output:
   "task": {
     "original_user_request": "",
     "non_negotiable_requirements": [],
-    "acceptance_criteria": []
+    "acceptance_criteria": [],
+    "project_specification": {}
   },
   "project": {
     "project_id": 0,
@@ -53,6 +55,7 @@ Agents must not output:
     "workspace_path": "",
     "project_state": {},
     "project_state_summary": {},
+    "project_specification": {},
     "project_graph": {},
     "project_execution_contract": {},
     "workspace_state": {}
@@ -131,6 +134,17 @@ Required top-level fields:
 Language-specific details belong under `module_strategy`, such as `python_imports`,
 `dotnet_namespace`, `cpp_include`, `node_module`, `go_module`, or `java_package`.
 
+## Project Specification
+
+`project_specification` is the structured intent extracted from the original user request before
+Planner, Architect, and Coder operate. It is not source code. It captures project type, language,
+framework, runtime expectations, required features, entities, expected files/tests, acceptance
+criteria, constraints, confidence, and source evidence.
+
+Agents should treat Project Specification as the source of truth for intent. Do not contradict it
+unless validation evidence proves it wrong; when confidence is low, stay conservative and preserve
+the original request.
+
 ## Unified Project State
 
 `project_state` is the shared evidence snapshot for stages. It distinguishes materialized
@@ -150,9 +164,9 @@ Required summary fields:
 
 ## Required Context Per Agent
 
-- Planner: original request and acceptance criteria.
-- Architect: original request, planner output, constraints, project assumptions, execution contract.
-- Coder: original request, planner output, architect output, execution contract, project graph if available.
+- Planner: original request, acceptance criteria, and project specification.
+- Architect: original request, planner output, project specification, constraints, project assumptions, execution contract.
+- Coder: original request, planner output, architect output, project specification, execution contract, project graph if available.
 - Sanitizer: raw agent output, canonical action contract, schema errors.
 - Static Reviewer: canonical actions, original request, architecture, project_state if available.
 - Tester: workspace path, execution contract test command, expected behavior.

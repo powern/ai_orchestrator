@@ -161,6 +161,11 @@ Prefer creating a minimal working Python project with tests.
 Agent Protocol:
 {PROTOCOL_SUMMARY}
 
+Project Specification rules:
+- Treat project_specification in AgentContext as the source of truth for intent.
+- Do not contradict specified language/framework/runtime unless validation evidence proves it wrong.
+- If specification confidence is low, stay conservative and preserve the original request.
+
 For simple Flask or visual smoke-test web apps:
 - Make the app manually runnable with python app/main.py when app/main.py exists.
 - Include if __name__ == "__main__": app.run(host="0.0.0.0", port=5000).
@@ -862,6 +867,7 @@ Constraints:
 - no markdown
 - no explanations
 - no code
+- follow project_specification from AgentContext
 - for Flask visual apps, app/main.py must be runnable with python app/main.py
 - for Flask visual apps, include RUN.md and visible behavior tests
 - define a Project Execution Contract with language, project_root, source_roots, test_roots,

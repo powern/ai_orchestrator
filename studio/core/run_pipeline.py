@@ -6,6 +6,7 @@ from studio.config.settings import (
     FIX_MAX_OUTPUT_RETRIES,
     FIX_MAX_SANITIZE_ATTEMPTS,
 )
+from studio.contracts.project_specification import build_project_specification
 from studio.core.executor_schema import validate_executor_actions
 from studio.core.json_utils import normalize_coder_json
 from studio.core.llm_adapter import LLMAdapter
@@ -261,7 +262,23 @@ class RunPipeline:
             except Exception:
                 return None
 
-        project_id = get_project_id(project) or get_project_id_for_run(run_id)
+        project_data = dict(project) if not isinstance(project, dict) else project
+        project_id = get_project_id(project_data) or get_project_id_for_run(run_id)
+        project_description = project_data.get("description", "")
+        add_event(
+            run_id,
+            "project_specification_started",
+            "project_specification",
+            "Project specification extraction started.",
+        )
+        project_specification = build_project_specification(project_description).to_dict()
+        add_event(
+            run_id,
+            "project_specification_completed",
+            "project_specification",
+            "Project specification extracted from original request.",
+            json.dumps(project_specification, ensure_ascii=False),
+        )
         planner_output = self.planner_fn(run_id, project)
 
         architect_output = run_architect_stage(
@@ -283,8 +300,9 @@ class RunPipeline:
         static_project_state = ProjectStateBuilder().build(
             run_id=run_id,
             project_id=project_id,
-            workspace_path=project["workspace_path"],
+            workspace_path=project_data["workspace_path"],
             executor_actions=coder_actions,
+            project_specification=project_specification,
         )
         static_review = StaticReviewerAgent().review(
             coder_actions,
@@ -334,7 +352,7 @@ class RunPipeline:
 
             fix_result = _run_fix_stage_with_context(
                 run_id,
-                project["workspace_path"],
+                project_data["workspace_path"],
                 coder_output,
                 static_failure,
                 {
@@ -348,7 +366,7 @@ class RunPipeline:
             sanitized_fix = sanitize_fix_output_or_fail(
                 run_id,
                 fix_result["output"],
-                project["workspace_path"],
+                project_data["workspace_path"],
                 coder_output,
                 static_failure,
                 trigger_stage="static_review_failed",
@@ -363,8 +381,9 @@ class RunPipeline:
             static_project_state = ProjectStateBuilder().build(
                 run_id=run_id,
                 project_id=project_id,
-                workspace_path=project["workspace_path"],
+                workspace_path=project_data["workspace_path"],
                 executor_actions=actions,
+                project_specification=project_specification,
             )
             static_review = StaticReviewerAgent().review(actions, static_project_state)
 
@@ -414,13 +433,13 @@ class RunPipeline:
 
         run_executor_stage(
             run_id,
-            project["workspace_path"],
+            project_data["workspace_path"],
             coder_output,
         )
 
         tester_result = run_tester_stage(
             run_id,
-            project["workspace_path"],
+            project_data["workspace_path"],
         )
         save_stage_output(
             run_id,
@@ -429,7 +448,7 @@ class RunPipeline:
         )
 
         if tester_result.success:
-            readiness_ok, _ = run_runtime_readiness_stage(run_id, project["workspace_path"])
+            readiness_ok, _ = run_runtime_readiness_stage(run_id, project_data["workspace_path"])
             if not readiness_ok:
                 maybe_record_engineering_shadow()
                 return
@@ -454,7 +473,7 @@ class RunPipeline:
 
         fix_result = run_fix_stage(
             run_id,
-            project["workspace_path"],
+            project_data["workspace_path"],
             coder_output,
             tester_result,
         )
@@ -462,7 +481,7 @@ class RunPipeline:
         sanitized_fix = sanitize_fix_output_or_fail(
             run_id,
             fix_result["output"],
-            project["workspace_path"],
+            project_data["workspace_path"],
             coder_output,
             tester_result,
         )
@@ -474,8 +493,9 @@ class RunPipeline:
         fix_project_state = ProjectStateBuilder().build(
             run_id=run_id,
             project_id=project_id,
-            workspace_path=project["workspace_path"],
+            workspace_path=project_data["workspace_path"],
             executor_actions=actions,
+            project_specification=project_specification,
         )
         static_review = StaticReviewerAgent().review(actions, fix_project_state)
 
@@ -508,13 +528,13 @@ class RunPipeline:
 
         run_executor_stage(
             run_id,
-            project["workspace_path"],
+            project_data["workspace_path"],
             coder_output,
         )
 
         tester_result = run_tester_stage(
             run_id,
-            project["workspace_path"],
+            project_data["workspace_path"],
         )
         save_stage_output(
             run_id,
@@ -523,7 +543,7 @@ class RunPipeline:
         )
 
         if tester_result.success:
-            readiness_ok, _ = run_runtime_readiness_stage(run_id, project["workspace_path"])
+            readiness_ok, _ = run_runtime_readiness_stage(run_id, project_data["workspace_path"])
             if not readiness_ok:
                 maybe_record_engineering_shadow()
                 return

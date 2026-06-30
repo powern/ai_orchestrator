@@ -156,7 +156,9 @@ def infer_execution_contract(
     workspace_state: dict[str, Any] | None = None,
     project_graph: dict[str, Any] | None = None,
     executor_actions: list[dict[str, Any]] | None = None,
+    project_specification: dict[str, Any] | None = None,
 ) -> ProjectExecutionContract:
+    spec = project_specification or {}
     graph = project_graph or (workspace_state or {}).get("project_graph") or {}
     state = workspace_state or {}
     action_paths = [
@@ -188,18 +190,23 @@ def infer_execution_contract(
     project_types = set((graph.get("summary") or {}).get("project_types") or [])
     project_types.update(state.get("project_type_hints") or [])
     language = _language(project_types, dependency_files, source_files, action_paths)
-    source_roots = _roots(source_files)
-    test_roots = _roots(test_files)
+    if language == "unknown" and spec.get("language"):
+        language = spec["language"]
+    source_roots = _roots(source_files) or _default_source_roots(spec, language)
+    test_roots = _roots(test_files) or _default_test_roots(spec, language)
     entrypoints = graph.get("entrypoints") or []
     run_command = _first_runtime_command(action_commands)
     if not run_command and entrypoints:
         run_command = _run_command_for_entrypoint(language, entrypoints[0].get("path"))
     if not run_command:
         run_command = _known_run_command(action_paths, workspace_path)
+    if not run_command:
+        run_command = _default_run_command(spec, language)
     test_command = _first_test_command(action_commands) or _default_test_command(language)
     build_command = _default_build_command(language, dependency_files, action_paths)
-    framework = _framework(project_types, graph)
+    framework = _framework(project_types, graph) or _framework_from_spec(spec)
     module_strategy = _module_strategy(language, graph, source_roots, dependency_files)
+    runtime = spec.get("runtime") or {}
 
     return ProjectExecutionContract(
         language=language,
@@ -216,8 +223,8 @@ def infer_execution_contract(
             required=bool(run_command),
             command=run_command,
             working_directory=".",
-            host="0.0.0.0" if framework in {"flask", "fastapi"} else None,
-            port=5000 if framework == "flask" else None,
+            host=runtime.get("host") or ("0.0.0.0" if framework in {"flask", "fastapi"} else None),
+            port=runtime.get("port") or (5000 if framework == "flask" else None),
         ),
         test=CommandContract(
             required=bool(test_command),
@@ -226,7 +233,7 @@ def infer_execution_contract(
         ),
         module_strategy=module_strategy,
         artifacts=ArtifactContract(
-            expected_files=sorted(set(dependency_files)),
+            expected_files=sorted(set(dependency_files + list(spec.get("expected_files") or []))),
             expected_directories=sorted(set(source_roots + test_roots)),
         ),
     )
@@ -495,6 +502,38 @@ def _framework(project_types: set[str], graph: dict[str, Any]) -> str | None:
     for module in graph.get("modules", []):
         if module.get("framework"):
             return module["framework"]
+    return None
+
+
+def _framework_from_spec(spec: dict[str, Any]) -> str | None:
+    framework = spec.get("framework")
+    return framework if framework and framework not in {"none", "unknown"} else None
+
+
+def _default_source_roots(spec: dict[str, Any], language: str) -> list[str]:
+    expected = spec.get("expected_files") or []
+    roots = _roots([path for path in expected if "/" in path])
+    if roots:
+        return [root for root in roots if root != "tests"]
+    if language == "python":
+        return ["app"]
+    if language == "cpp":
+        return ["src"]
+    return []
+
+
+def _default_test_roots(spec: dict[str, Any], language: str) -> list[str]:
+    expected = spec.get("expected_files") or []
+    roots = _roots([path for path in expected if path.startswith("tests/")])
+    if roots:
+        return roots
+    return ["tests"] if language == "python" else []
+
+
+def _default_run_command(spec: dict[str, Any], language: str) -> str | None:
+    runtime = spec.get("runtime") or {}
+    if language == "python" and runtime.get("kind") in {"web", "cli"}:
+        return "python app/main.py"
     return None
 
 

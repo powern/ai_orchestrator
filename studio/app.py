@@ -240,6 +240,7 @@ def _project_state_for_run(run, handoff_history):
         executor_actions=run["coder_output"],
         stage_outputs={field: run[field] for field in STAGE_OUTPUT_FIELDS if run[field]},
         handoff_history=handoff_history,
+        request_text=project.get("description", ""),
     ).to_dict()
     for section_name in ("actual_files", "planned_files", "merged_files"):
         for item in payload.get(section_name, {}).get("files", []):

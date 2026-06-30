@@ -23,6 +23,7 @@ class DiagnosticCase:
     project_graph: dict[str, Any]
     execution_contract: dict[str, Any]
     import_graph: dict[str, list[str]]
+    project_specification: dict[str, Any] = field(default_factory=dict)
     latest_handoff: dict[str, Any] = field(default_factory=dict)
     original_requirements: str = ""
     previous_failure_signatures: list[str] = field(default_factory=list)
@@ -38,6 +39,7 @@ class DiagnosticCase:
             "relevant_files": sorted(self.relevant_files),
             "project_graph": self.project_graph,
             "execution_contract": self.execution_contract,
+            "project_specification": self.project_specification,
             "import_graph": self.import_graph,
             "latest_handoff": self.latest_handoff,
             "original_requirements": self.original_requirements,
@@ -158,6 +160,7 @@ class DiagnosticCaseBuilder:
             relevant_files=relevant_files,
             project_graph=project_graph,
             execution_contract=contract,
+            project_specification=(project_state or {}).get("project_specification", {}),
             import_graph=import_graph,
             latest_handoff=latest_handoff or {},
             original_requirements=original_requirements,

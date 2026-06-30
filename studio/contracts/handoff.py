@@ -96,6 +96,10 @@ def build_handoff(
     project = context.get("project", {})
     project_graph = project.get("project_graph", {})
     execution_contract = _execution_contract_for_context(project, summary)
+    project_specification = project.get("project_specification") or project.get(
+        "project_state",
+        {},
+    ).get("project_specification", {})
     graph_summary = project_graph.get("summary", {})
     assumptions = {
         "project_types": graph_summary.get("project_types", []),
@@ -109,6 +113,7 @@ def build_handoff(
         project_graph,
         producer,
         execution_contract,
+        project_specification,
     )
     decision_summary = _decision_summary(summary)
     effective_risks = known_risks or []
@@ -302,10 +307,14 @@ def _compact_contract(
     project_graph: dict[str, Any],
     producer: str,
     execution_contract: dict[str, Any],
+    project_specification: dict[str, Any],
 ) -> dict[str, Any]:
     compact = dict(contract)
     compact.update(_contract_from_graph(project_graph))
     compact.update(_contract_from_executor_actions(summary, producer))
+    if project_specification:
+        compact["project_specification"] = project_specification
+        compact.update(_specification_decision_fields(project_specification))
     if execution_contract:
         compact["project_execution_contract"] = execution_contract
         compact.update(_execution_contract_decision_fields(execution_contract))
@@ -322,6 +331,8 @@ def _execution_contract_for_context(project: dict[str, Any], summary: str) -> di
         workspace_state=project.get("workspace_state") or {},
         project_graph=project.get("project_graph") or {},
         executor_actions=actions,
+        project_specification=project.get("project_specification")
+        or project.get("project_state", {}).get("project_specification"),
     ).to_dict()
 
 
@@ -413,6 +424,22 @@ def _execution_contract_decision_fields(contract: dict[str, Any]) -> dict[str, A
         "include_roots": module.get("include_roots"),
         "expected_files": artifacts.get("expected_files"),
         "expected_directories": artifacts.get("expected_directories"),
+    }
+    return {key: value for key, value in fields.items() if value not in (None, [], {}, "")}
+
+
+def _specification_decision_fields(specification: dict[str, Any]) -> dict[str, Any]:
+    fields = {
+        "specified_project_type": specification.get("project_type"),
+        "specified_language": specification.get("language"),
+        "specified_framework": specification.get("framework"),
+        "required_features": [
+            feature.get("name") for feature in specification.get("features", [])
+        ],
+        "required_entities": [
+            entity.get("name") for entity in specification.get("entities", [])
+        ],
+        "specification_confidence": specification.get("confidence"),
     }
     return {key: value for key, value in fields.items() if value not in (None, [], {}, "")}
 

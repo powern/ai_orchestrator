@@ -5,6 +5,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from studio.contracts.execution import infer_execution_contract
+from studio.contracts.project_specification import build_project_specification
 from studio.core.workspace_observer import WorkspaceObserver
 
 TEXT_SUFFIXES = {
@@ -55,6 +56,7 @@ class ProjectState:
     executor_actions: list[dict[str, Any]]
     project_graph: dict[str, Any]
     execution_contract: dict[str, Any]
+    project_specification: dict[str, Any] = field(default_factory=dict)
     decision_history: list[dict[str, Any]] = field(default_factory=list)
     validation_evidence: dict[str, Any] = field(default_factory=dict)
     diagnostic_evidence: dict[str, Any] = field(default_factory=dict)
@@ -71,6 +73,7 @@ class ProjectState:
             "executor_actions": self.executor_actions,
             "project_graph": self.project_graph,
             "execution_contract": self.execution_contract,
+            "project_specification": self.project_specification,
             "decision_history": self.decision_history,
             "validation_evidence": self.validation_evidence,
             "diagnostic_evidence": self.diagnostic_evidence,
@@ -94,6 +97,9 @@ class ProjectState:
             "source_roots": self.execution_contract.get("source_roots", []),
             "test_roots": self.execution_contract.get("test_roots", []),
             "language": self.execution_contract.get("language", "unknown"),
+            "framework": self.project_specification.get("framework", "unknown"),
+            "project_type": self.project_specification.get("project_type", "unknown"),
+            "specification_confidence": self.project_specification.get("confidence", 0.0),
         }
 
 
@@ -106,6 +112,8 @@ class ProjectStateBuilder:
         executor_actions: list[dict[str, Any]] | str | None = None,
         stage_outputs: dict[str, Any] | None = None,
         handoff_history: list[dict[str, Any]] | None = None,
+        project_specification: dict[str, Any] | None = None,
+        request_text: str | None = None,
     ) -> ProjectState:
         workspace = Path(workspace_path) if workspace_path else None
         actions = self._actions(executor_actions)
@@ -120,10 +128,12 @@ class ProjectStateBuilder:
             self._materialize_files(virtual_workspace, merged_map)
             observation = WorkspaceObserver().observe(virtual_workspace)
 
+        spec = project_specification or build_project_specification(request_text).to_dict()
         execution_contract = infer_execution_contract(
             workspace_state=observation,
             project_graph=observation.get("project_graph", {}),
             executor_actions=actions,
+            project_specification=spec,
         ).to_dict()
 
         return ProjectState(
@@ -136,6 +146,7 @@ class ProjectStateBuilder:
             executor_actions=actions,
             project_graph=observation.get("project_graph", {}),
             execution_contract=execution_contract,
+            project_specification=spec,
             decision_history=handoff_history or [],
             validation_evidence=stage_outputs or {},
             diagnostic_evidence={},
@@ -162,6 +173,7 @@ class ProjectStateBuilder:
             executor_actions=state.get("executor_actions", []),
             project_graph=state.get("project_graph", {}),
             execution_contract=state.get("execution_contract", {}),
+            project_specification=state.get("project_specification", {}),
             decision_history=state.get("decision_history", []),
             validation_evidence=state.get("validation_evidence", {}),
             diagnostic_evidence=state.get("diagnostic_evidence", {}),

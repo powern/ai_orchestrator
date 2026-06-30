@@ -51,6 +51,7 @@ def record_engineering_shadow_assessment(run_id: int, project: dict | None) -> d
         project_id=run["project_id"],
         workspace_path=workspace_path,
         executor_actions=run.get("coder_output"),
+        request_text=project_data.get("description", ""),
     )
     observation["project_state_summary"] = project_state.summary()
     observation["project_state_source"] = project_state.state_source

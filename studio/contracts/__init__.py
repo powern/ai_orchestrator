@@ -16,6 +16,11 @@ from studio.contracts.handoff import (
     load_handoff_history,
     load_latest_handoff,
 )
+from studio.contracts.project_specification import (
+    ProjectSpecification,
+    ProjectSpecificationEngine,
+    build_project_specification,
+)
 from studio.contracts.protocol_validator import (
     ProtocolValidator,
     ProtocolViolation,
@@ -30,9 +35,12 @@ __all__ = [
     "ProtocolValidator",
     "ProtocolViolation",
     "ProjectExecutionContract",
+    "ProjectSpecification",
+    "ProjectSpecificationEngine",
     "build_agent_context",
     "append_handoff",
     "build_handoff",
+    "build_project_specification",
     "infer_execution_contract",
     "load_handoff_history",
     "load_latest_handoff",

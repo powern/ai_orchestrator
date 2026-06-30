@@ -5,6 +5,7 @@ from typing import Any
 
 from studio.contracts.execution import infer_execution_contract
 from studio.contracts.handoff import load_handoff_history, load_latest_handoff
+from studio.contracts.project_specification import build_project_specification
 from studio.core.project_state import ProjectStateBuilder
 from studio.core.workspace_observer import WorkspaceObserver
 from studio.services.engineering_service import get_latest_engineering_assessment
@@ -68,8 +69,12 @@ def build_agent_context(
         workspace_path=resolved_workspace,
         stage_outputs=previous_stage_outputs,
         handoff_history=handoff_history,
+        request_text=project.get("description", ""),
     )
     project_state_payload = project_state.to_dict()
+    project_specification = project_state.project_specification or build_project_specification(
+        project.get("description", "")
+    ).to_dict()
     project_graph = project_state.project_graph or workspace_state.get("project_graph", {})
     execution_contract = project_state.execution_contract or workspace_state.get(
         "execution_contract"
@@ -84,6 +89,7 @@ def build_agent_context(
         "original_user_request": project.get("description", ""),
         "non_negotiable_requirements": _extract_requirement_lines(project.get("description", "")),
         "acceptance_criteria": _extract_acceptance_criteria(project.get("description", "")),
+        "project_specification": project_specification,
     }
     outputs = {
         "planner_output": run.get("planner_output"),
@@ -115,6 +121,7 @@ def build_agent_context(
             "workspace_path": resolved_workspace,
             "project_state": project_state_payload,
             "project_state_summary": project_state.summary(),
+            "project_specification": project_specification,
             "project_graph": project_graph,
             "workspace_state": workspace_state,
             "execution_contract": execution_contract,

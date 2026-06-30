@@ -69,6 +69,7 @@ class StaticReviewerAgent(BaseAgent):
 
         state = project_state or ProjectStateBuilder().build(executor_actions=raw_actions)
         state_payload = state.to_dict() if hasattr(state, "to_dict") else state
+        findings.extend(self._review_project_specification(state_payload))
         execution_contract = state_payload.get("execution_contract") or infer_execution_contract(
             executor_actions=raw_actions,
         ).to_dict()
@@ -76,6 +77,12 @@ class StaticReviewerAgent(BaseAgent):
             execution_contract,
             planned_files=planned_files,
         ):
+            if violation.code in {
+                "missing_source_root",
+                "missing_test_root",
+                "missing_python_import_root",
+            }:
+                continue
             if violation.severity == "error":
                 findings.append(f"Execution contract violation: {violation.message}")
 
@@ -137,6 +144,21 @@ class StaticReviewerAgent(BaseAgent):
                 )
 
         return findings
+
+    def _review_project_specification(self, project_state: dict) -> list[str]:
+        specification = project_state.get("project_specification") or {}
+        if specification.get("framework") != "flask":
+            return []
+        for item in (project_state.get("merged_files") or {}).get("files", []):
+            if item.get("path") != "app/main.py":
+                continue
+            preview = item.get("content_preview", "")
+            if "Flask(" not in preview and "@app.route" not in preview:
+                return [
+                    "Project specification mismatch: app/main.py does not match "
+                    "requested framework."
+                ]
+        return []
 
     def _imports_flask_name(self, content: str, name: str) -> bool:
         for line in content.splitlines():

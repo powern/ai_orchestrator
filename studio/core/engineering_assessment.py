@@ -28,7 +28,14 @@ class ConfidenceAssessor:
             "has_tests": observation.get("tests", {}).get("count", 0) > 0,
             "has_run_metadata": bool(observation.get("run_metadata_files")),
             "project_graph_summary": observation.get("project_graph", {}).get("summary", {}),
+            "project_specification": observation.get("project_state_summary", {}),
         }
+        spec_summary = evidence["project_specification"]
+        if spec_summary.get("specification_confidence", 0) > 0:
+            reasons.append(
+                "Project specification exists "
+                f"({spec_summary.get('language')}/{spec_summary.get('framework')})."
+            )
 
         event_types = set(evidence["events"])
         if (
