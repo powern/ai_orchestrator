@@ -249,6 +249,18 @@ def get_latest_engineering_assessment(run_id: int) -> dict | None:
 
 def _validation_results(run: dict) -> list[dict[str, Any]]:
     results = []
+    if run.get("validation_report"):
+        payload = run["validation_report"]
+        report = _loads(payload)
+        status = "passed" if report.get("approved") else "failed"
+        results.append(
+            {
+                "kind": "validation_report",
+                "status": status,
+                "payload_json": payload,
+            }
+        )
+
     if run.get("runtime_readiness"):
         payload = run["runtime_readiness"]
         readiness = _loads(payload)

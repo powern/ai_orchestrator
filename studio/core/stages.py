@@ -472,7 +472,12 @@ def run_tester_stage(run_id, workspace_path):
                 bug_report,
                 execution_contract=execution_contract,
             )
-            repair_plan = RepairPlanner().plan(analysis, execution_contract=execution_contract)
+            validation_report_output = get_stage_output(run_id, "validation_report") or ""
+            repair_plan = RepairPlanner().plan(
+                analysis,
+                execution_contract=execution_contract,
+                validation_report=validation_report_output,
+            )
             repair_plan_json = repair_plan.to_json()
             save_stage_output(
                 run_id,
@@ -565,6 +570,7 @@ def run_tester_stage(run_id, workspace_path):
                     ensure_ascii=False,
                     indent=2,
                 ),
+                validation_report=validation_report_output,
             )
 
             save_stage_output(run_id, "result", fix_prompt)
@@ -633,6 +639,7 @@ def run_fix_stage(
     emit_started=True,
     trigger_stage="tester_failed",
     static_review_output=None,
+    validation_report=None,
     rejected_actions=None,
     project_state=None,
 ):
@@ -658,6 +665,9 @@ def run_fix_stage(
     coder_raw_output = get_stage_output(run_id, "coder_raw_output") or ""
     planner_output = get_stage_output(run_id, "planner_output") or ""
     architect_output = get_stage_output(run_id, "architect_output") or ""
+    validation_report_output = (
+        validation_report or get_stage_output(run_id, "validation_report") or ""
+    )
     base_context = build_agent_context(
         run_id=run_id,
         current_stage="fix",
@@ -673,7 +683,11 @@ def run_fix_stage(
         execution_contract=execution_contract,
         project_state=project_state,
     )
-    repair_plan = RepairPlanner().plan(analysis, execution_contract=execution_contract)
+    repair_plan = RepairPlanner().plan(
+        analysis,
+        execution_contract=execution_contract,
+        validation_report=validation_report_output,
+    )
     repair_plan_json = repair_plan.to_json()
     save_stage_output(
         run_id,
@@ -720,6 +734,7 @@ def run_fix_stage(
             "repair_plan": repair_plan.to_dict(),
             "project_execution_contract": execution_contract,
             "static_review": static_review_output or {},
+            "validation_report": validation_report_output,
         },
     )
     record_protocol_context(run_id, "fix", agent_context)
@@ -742,6 +757,7 @@ def run_fix_stage(
         agent_context_json=agent_context.to_prompt_json(),
         protocol_summary=PROTOCOL_SUMMARY,
         project_execution_contract=json.dumps(execution_contract, ensure_ascii=False, indent=2),
+        validation_report=validation_report_output,
     )
 
     if previous_error is not None:

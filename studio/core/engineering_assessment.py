@@ -60,6 +60,21 @@ class ConfidenceAssessor:
 
         readiness = self._parse_json(run.get("runtime_readiness"))
         evidence["runtime_readiness"] = readiness
+        validation_report = self._parse_json(run.get("validation_report"))
+        evidence["validation_report"] = validation_report
+        if validation_report:
+            summary = validation_report.get("summary") or {}
+            critical = summary.get("critical", 0)
+            major = summary.get("major", 0)
+            minor = summary.get("minor", 0)
+            if validation_report.get("approved") is True:
+                score += 0.1
+                reasons.append("Structured validation passed.")
+            else:
+                reasons.append(
+                    "Structured validation has unresolved findings "
+                    f"(critical={critical}, major={major}, minor={minor})."
+                )
         if readiness:
             if readiness.get("manual_run_ready") is True:
                 score += 0.25
@@ -110,6 +125,8 @@ class EngineeringDecisionModel:
     ) -> dict:
         evidence = confidence.evidence
         readiness = evidence.get("runtime_readiness") or {}
+        validation_report = evidence.get("validation_report") or {}
+        validation_summary = validation_report.get("summary") or {}
 
         if run.get("status") == "completed" and confidence.score >= 0.85:
             objective = "No further engineering needed."
@@ -120,6 +137,14 @@ class EngineeringDecisionModel:
             objective = "Repair runtime readiness issues before considering the project complete."
             target_area = "runtime_readiness"
             expected_validation = "Runtime readiness validation passes."
+            should_continue = True
+        elif validation_report and validation_report.get("approved") is not True:
+            objective = "Repair structured validation report violations."
+            target_area = "validation_report"
+            expected_validation = (
+                "Validation Report passes with zero critical violations; current summary: "
+                f"{validation_summary}."
+            )
             should_continue = True
         elif run.get("status") == "failed" or "tester_failed" in evidence.get("events", []):
             objective = "Analyze and repair the failing validation path."

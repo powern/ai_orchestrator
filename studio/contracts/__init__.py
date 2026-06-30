@@ -25,6 +25,11 @@ from studio.contracts.protocol_validator import (
     ProtocolValidator,
     ProtocolViolation,
 )
+from studio.contracts.validation_report import (
+    ValidationReport,
+    ValidationViolation,
+    build_validation_report,
+)
 
 __all__ = [
     "AgentContext",
@@ -37,10 +42,13 @@ __all__ = [
     "ProjectExecutionContract",
     "ProjectSpecification",
     "ProjectSpecificationEngine",
+    "ValidationReport",
+    "ValidationViolation",
     "build_agent_context",
     "append_handoff",
     "build_handoff",
     "build_project_specification",
+    "build_validation_report",
     "infer_execution_contract",
     "load_handoff_history",
     "load_latest_handoff",

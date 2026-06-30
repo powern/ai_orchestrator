@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+from studio.contracts.validation_report import ValidationReport
 from studio.core.failure_analysis import FailureAnalysis
 
 
@@ -17,6 +18,7 @@ class RepairPlan:
         "or production-code repair cannot address the failure."
     )
     project_execution_contract: dict[str, Any] = field(default_factory=dict)
+    validation_report: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -27,6 +29,7 @@ class RepairPlan:
             "reason": self.reason,
             "test_modification_policy": self.test_modification_policy,
             "project_execution_contract": self.project_execution_contract,
+            "validation_report": self.validation_report,
         }
 
     def to_json(self) -> str:
@@ -38,12 +41,29 @@ class RepairPlanner:
         self,
         analysis: FailureAnalysis,
         execution_contract: dict[str, Any] | None = None,
+        validation_report: dict[str, Any] | ValidationReport | str | None = None,
     ) -> RepairPlan:
         contract = execution_contract or analysis.execution_contract
+        report = self._validation_report(validation_report)
         diagnosis = self._actionable_diagnosis(analysis.verified_diagnosis or {}, analysis)
         root_cause = analysis.root_cause or "unknown"
         repair_targets = []
         secondary_targets = []
+
+        if report:
+            for violation in report.violations:
+                for target in violation.affected_files:
+                    if target.startswith("tests/"):
+                        if target not in secondary_targets:
+                            secondary_targets.append(target)
+                    elif target and target not in repair_targets:
+                        repair_targets.append(target)
+                if violation.location and not violation.location.startswith("tests/"):
+                    if violation.location not in repair_targets:
+                        repair_targets.append(violation.location)
+            primary_violation = self._primary_validation_violation(report)
+            if primary_violation:
+                root_cause = primary_violation.message or root_cause
 
         if diagnosis:
             if diagnosis.get("confidence", 1.0) >= 0.55:
@@ -110,7 +130,33 @@ class RepairPlanner:
                 else analysis.reason
             ),
             project_execution_contract=contract,
+            validation_report=report.to_dict() if report else {},
         )
+
+    def _validation_report(
+        self,
+        value: dict[str, Any] | ValidationReport | str | None,
+    ) -> ValidationReport | None:
+        if value is None or value == "":
+            return None
+        if isinstance(value, ValidationReport):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except (TypeError, json.JSONDecodeError):
+                return None
+            value = parsed
+        if isinstance(value, dict):
+            return ValidationReport.from_dict(value)
+        return None
+
+    def _primary_validation_violation(self, report: ValidationReport):
+        severity_rank = {"critical": 0, "major": 1, "minor": 2}
+        actionable = [item for item in report.violations if item.affected_files or item.location]
+        if not actionable:
+            return None
+        return sorted(actionable, key=lambda item: severity_rank.get(item.severity, 1))[0]
 
     def _looks_missing_module_placeholder(self, path: str) -> bool:
         return not (path.startswith("app/") or path.startswith("tests/"))

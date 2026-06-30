@@ -162,6 +162,7 @@ class FixPromptBuilder:
         agent_context_json: str | None = None,
         protocol_summary: str | None = None,
         project_execution_contract: str | None = None,
+        validation_report: str | None = None,
     ) -> str:
         workspace_context = self._format_workspace_files(workspace_files or [])
         task_context = task_description or "Not available."
@@ -179,6 +180,7 @@ class FixPromptBuilder:
         execution_contract = (
             project_execution_contract or "No Project Execution Contract was available."
         )
+        validation_context = validation_report or "No Validation Report was available."
         static_review_instructions = ""
 
         if trigger_stage == "static_review_failed":
@@ -199,6 +201,9 @@ The generated project failed its tests or static review.
 You must return ONLY Executor JSON actions that implement the repair plan.
 Do not explain anything.
 Do not use markdown.
+Use Validation Report violation IDs, severity, affected files, evidence, and repair_hint
+as primary validation evidence.
+Satisfy critical Validation Report violations before major or minor issues.
 
 Agent Protocol:
 {protocol_context}
@@ -208,6 +213,9 @@ AgentContext:
 
 Project Execution Contract:
 {execution_contract}
+
+Validation Report:
+{validation_context}
 
 Original task description:
 {task_context}

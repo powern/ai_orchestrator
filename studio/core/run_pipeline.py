@@ -104,6 +104,7 @@ def sanitize_fix_output_or_fail(
     tester_result,
     trigger_stage="tester_failed",
     static_review_output=None,
+    validation_report=None,
     rejected_actions=None,
 ):
     current_output = fix_output
@@ -159,6 +160,7 @@ def sanitize_fix_output_or_fail(
                     "emit_started": False,
                     "trigger_stage": trigger_stage,
                     "static_review_output": static_review_output,
+                    "validation_report": validation_report,
                     "rejected_actions": rejected_actions,
                 },
             )
@@ -175,6 +177,51 @@ def sanitize_fix_output_or_fail(
         return sanitized_fix
 
     return None
+
+
+def static_review_payload(static_review):
+    if getattr(static_review, "validation_report", None):
+        return static_review.validation_report.to_json()
+    if hasattr(static_review, "to_dict"):
+        payload = static_review.to_dict()
+    else:
+        payload = {
+            "summary": getattr(static_review, "summary", "Static review completed."),
+            "score": getattr(static_review, "score", 0),
+            "approved": getattr(static_review, "approved", False),
+            "findings": getattr(static_review, "findings", []),
+        }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def record_validation_report(run_id, static_review, event_type="validation_completed"):
+    payload = static_review_payload(static_review)
+    save_stage_output(run_id, "validation_report", payload)
+    add_event(
+        run_id,
+        event_type,
+        "static_reviewer",
+        "Structured validation report generated.",
+        payload,
+    )
+    if event_type != "validation_report_generated":
+        add_event(
+            run_id,
+            "validation_report_generated",
+            "static_reviewer",
+            "Validation Report persisted for downstream agents.",
+            payload,
+        )
+    report = getattr(static_review, "validation_report", None)
+    for item in report.violations if report else []:
+        add_event(
+            run_id,
+            "validation_violation_detected",
+            "static_reviewer",
+            item.message,
+            json.dumps(item.to_dict(), ensure_ascii=False, indent=2),
+        )
+    return payload
 
 
 def _run_fix_stage_with_context(run_id, workspace_path, coder_output, tester_result, context):
@@ -304,30 +351,28 @@ class RunPipeline:
             executor_actions=coder_actions,
             project_specification=project_specification,
         )
+        add_event(
+            run_id,
+            "validation_started",
+            "static_reviewer",
+            "Structured validation started.",
+        )
         static_review = StaticReviewerAgent().review(
             coder_actions,
             static_project_state,
         )
+        validation_report_output = record_validation_report(run_id, static_review)
 
         add_event(
             run_id,
             "static_review_completed",
             "static_reviewer",
             "Static review completed.",
-            str(static_review),
+            validation_report_output,
         )
 
         if not static_review.approved:
-            static_review_output = json.dumps(
-                {
-                    "summary": static_review.summary,
-                    "score": static_review.score,
-                    "approved": static_review.approved,
-                    "findings": static_review.findings,
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
+            static_review_output = validation_report_output
             save_stage_output(run_id, "executor_output", static_review_output)
             save_stage_output(
                 run_id,
@@ -358,6 +403,7 @@ class RunPipeline:
                 {
                     "trigger_stage": "static_review_failed",
                     "static_review_output": static_review_output,
+                    "validation_report": static_review_output,
                     "rejected_actions": coder_output,
                     "project_state": static_project_state.to_dict(),
                 },
@@ -371,6 +417,7 @@ class RunPipeline:
                 static_failure,
                 trigger_stage="static_review_failed",
                 static_review_output=static_review_output,
+                validation_report=static_review_output,
                 rejected_actions=coder_output,
             )
             if sanitized_fix is None:
@@ -385,27 +432,29 @@ class RunPipeline:
                 executor_actions=actions,
                 project_specification=project_specification,
             )
+            add_event(
+                run_id,
+                "validation_started",
+                "static_reviewer",
+                "Structured validation started after static review fix.",
+            )
             static_review = StaticReviewerAgent().review(actions, static_project_state)
+            validation_report_output = record_validation_report(
+                run_id,
+                static_review,
+                event_type="validation_completed_after_fix",
+            )
 
             add_event(
                 run_id,
                 "static_review_completed_after_fix",
                 "static_reviewer",
                 "Static review completed after static review fix.",
-                str(static_review),
+                validation_report_output,
             )
 
             if not static_review.approved:
-                after_fix_output = json.dumps(
-                    {
-                        "summary": static_review.summary,
-                        "score": static_review.score,
-                        "approved": static_review.approved,
-                        "findings": static_review.findings,
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                )
+                after_fix_output = validation_report_output
                 save_stage_output(run_id, "executor_output", after_fix_output)
                 save_stage_output(
                     run_id,
@@ -497,14 +546,25 @@ class RunPipeline:
             executor_actions=actions,
             project_specification=project_specification,
         )
+        add_event(
+            run_id,
+            "validation_started",
+            "static_reviewer",
+            "Structured validation started after tester fix.",
+        )
         static_review = StaticReviewerAgent().review(actions, fix_project_state)
+        validation_report_output = record_validation_report(
+            run_id,
+            static_review,
+            event_type="validation_completed_after_fix",
+        )
 
         add_event(
             run_id,
             "static_review_completed_after_fix",
             "static_reviewer",
             "Static review completed after tester fix.",
-            str(static_review),
+            validation_report_output,
         )
 
         if not static_review.approved:

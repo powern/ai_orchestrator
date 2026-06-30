@@ -25,6 +25,7 @@
     <a href="#coder">Coder</a>
     <a href="#executor">Executor</a>
     <a href="#tester">Tester</a>
+    <a href="#validation-report">Validation</a>
     <a href="#analyzer">Analyzer</a>
     <a href="#repair-plan">Repair Plan</a>
     <a href="#fix">Fix</a>
@@ -78,6 +79,17 @@
     <p>Acceptance Criteria: {{ project_specification.acceptance_criteria }}</p>
 </section>
 {% endif %}
+{% endif %}
+
+{% if run.validation_report %}
+<section id="validation-report" class="run-summary">
+    <h3>Validation Report</h3>
+    <p>Structured validation evidence is available for this run.</p>
+    <details class="stage-output" open>
+        <summary>Report JSON</summary>
+        <pre>{{ run.validation_report }}</pre>
+    </details>
+</section>
 {% endif %}
 
 {% if agent_handoffs %}
@@ -224,6 +236,7 @@
     ('tester-before-fix', 'Tester Output Before Fix', run.tester_output_before_fix),
     ('tester-after-fix', 'Tester Output After Fix', run.tester_output_after_fix),
     ('runtime-readiness', 'Runtime Readiness', run.runtime_readiness),
+    ('validation-report-raw', 'Validation Report', run.validation_report),
     ('final-result', 'Final Result', run.result)
 ] %}
 

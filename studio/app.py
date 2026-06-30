@@ -45,6 +45,7 @@ STAGE_OUTPUT_FIELDS = [
     "tester_output_before_fix",
     "tester_output_after_fix",
     "runtime_readiness",
+    "validation_report",
     "result",
 ]
 
