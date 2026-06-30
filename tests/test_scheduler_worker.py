@@ -1,4 +1,6 @@
 import json
+import shutil
+from pathlib import Path
 
 from studio.core import stages
 from studio.database.db import init_db
@@ -14,52 +16,107 @@ class FakeLLMAdapter:
     def ask(self, model, system_prompt, user_prompt, json_mode=False):
         if json_mode:
             return json.dumps(
-                [
-                    {
-                        "action": "mkdir",
-                        "path": "app",
-                    },
-                    {
-                        "action": "mkdir",
-                        "path": "tests",
-                    },
-                    {
-                        "action": "write_file",
-                        "path": "app/__init__.py",
-                        "content": "",
-                    },
-                    {
-                        "action": "write_file",
-                        "path": "app/main.py",
-                        "content": (
-                            "def main():\n"
-                            "    return 'hello'\n\n\n"
-                            "if __name__ == \"__main__\":\n"
-                            "    print(main())\n"
-                        ),
-                    },
-                    {
-                        "action": "write_file",
-                        "path": "tests/test_main.py",
-                        "content": (
-                            "from app.main import main\n\n"
-                            "def test_main():\n"
-                            "    assert main() == 'hello'\n"
-                        ),
-                    },
-                    {
-                        "action": "write_file",
-                        "path": "RUN.md",
-                        "content": (
-                            "Install:\n"
-                            "No external dependencies.\n\n"
-                            "Run:\n"
-                            "python app/main.py\n\n"
-                            "Test:\n"
-                            "pytest -q\n"
-                        ),
-                    },
-                ]
+                {
+                    "schema_version": 1,
+                    "project_summary": "Simple Python app with tests.",
+                    "tests": {"command": "pytest -q"},
+                    "steps": [
+                        {
+                            "type": "create_directory",
+                            "path": "app",
+                            "purpose": "Application package",
+                            "content_description": "Package directory",
+                        },
+                        {
+                            "type": "create_directory",
+                            "path": "tests",
+                            "purpose": "Test package",
+                            "content_description": "Test directory",
+                        },
+                        {
+                            "type": "create_file",
+                            "path": "app/__init__.py",
+                            "purpose": "Package marker",
+                            "content_description": "Empty package marker",
+                            "content": "",
+                        },
+                        {
+                            "type": "create_file",
+                            "path": "app/main.py",
+                            "purpose": "Flask application entry point",
+                            "content_description": "Visual smoke counter app",
+                            "content": (
+                                "from flask import Flask, redirect, "
+                                "render_template_string, url_for\n\n"
+                                "app = Flask(__name__)\n\n\n"
+                                "counter = {'value': 0}\n\n\n"
+                                "TEMPLATE = '''<h1>Visual Smoke Test</h1>"
+                                "<p>Counter: {{ value }}</p>"
+                                "<a href=\"/increase\">Increase</a>"
+                                "<a href=\"/reset\">Reset</a>'''\n\n\n"
+                                "@app.route('/')\n"
+                                "def index():\n"
+                                "    return render_template_string(TEMPLATE, "
+                                "value=counter['value'])\n\n\n"
+                                "@app.route('/increase')\n"
+                                "def increase():\n"
+                                "    counter['value'] += 1\n"
+                                "    return redirect(url_for('index'))\n\n\n"
+                                "@app.route('/reset')\n"
+                                "def reset():\n"
+                                "    counter['value'] = 0\n"
+                                "    return redirect(url_for('index'))\n\n\n"
+                                "if __name__ == \"__main__\":\n"
+                                "    app.run(host=\"0.0.0.0\", port=5000)\n"
+                            ),
+                        },
+                        {
+                            "type": "create_file",
+                            "path": "tests/test_main.py",
+                            "purpose": "Behavior test",
+                            "content_description": "Validate visible counter behavior",
+                            "content": (
+                                "from app.main import app, counter\n\n\n"
+                                "def test_counter_visible_behavior():\n"
+                                "    counter['value'] = 0\n"
+                                "    client = app.test_client()\n"
+                                "    response = client.get('/')\n"
+                                "    assert response.status_code == 200\n"
+                                "    assert b'Visual Smoke Test' in response.data\n"
+                                "    assert b'Counter: 0' in response.data\n"
+                                "    assert b'Increase' in response.data\n"
+                                "    assert b'Reset' in response.data\n"
+                                "    response = client.get('/increase', follow_redirects=True)\n"
+                                "    assert b'Counter: 1' in response.data\n"
+                                "    response = client.get('/reset', follow_redirects=True)\n"
+                                "    assert b'Counter: 0' in response.data\n"
+                            ),
+                        },
+                        {
+                            "type": "create_file",
+                            "path": "requirements.txt",
+                            "purpose": "Python dependencies",
+                            "content_description": "Compatible Flask runtime dependencies",
+                            "content": "Flask==3.0.0\nWerkzeug==3.0.1\n",
+                        },
+                        {
+                            "type": "create_file",
+                            "path": "RUN.md",
+                            "purpose": "Manual run metadata",
+                            "content_description": "Install, run, and test commands",
+                            "content": (
+                                "Install:\n"
+                                "No external dependencies.\n\n"
+                                "Run:\n"
+                                "python app/main.py\n\n"
+                                "Open:\n"
+                                "http://127.0.0.1:5000/\n\n"
+                                "Test:\n"
+                                "pytest -q\n"
+                            ),
+                        },
+                    ]
+                }
             )
         return "1. Create Flask app\n2. Add one page\n3. Add tests"
 
@@ -69,7 +126,7 @@ class MalformedCoderLLMAdapter:
         if not json_mode:
             return "Files:\n- app/main.py\n- tests/test_main.py"
 
-        return '[{"action":"write_file","path":"app/main.py","content":"unterminated}'
+        return '{"schema_version":1,"steps":[{"type":"create_file","path":"app/main.py"'
 
 
 def test_scheduler_processes_next_queued_run(monkeypatch):
@@ -83,6 +140,9 @@ def test_scheduler_processes_next_queued_run(monkeypatch):
         "Scheduler Planner Test Project",
         "Create a simple Flask app with one page.",
     )
+    workspace = Path(get_project(project_id)["workspace_path"])
+    shutil.rmtree(workspace, ignore_errors=True)
+    workspace.mkdir(parents=True, exist_ok=True)
 
     create_run(project_id)
 
@@ -126,6 +186,9 @@ def test_scheduler_keeps_malformed_coder_output_inside_coder_stage(monkeypatch):
         "Self Healing GUI Test 2",
         "Generate a larger project that may produce malformed coder output.",
     )
+    workspace = Path(get_project(project_id)["workspace_path"])
+    shutil.rmtree(workspace, ignore_errors=True)
+    workspace.mkdir(parents=True, exist_ok=True)
     create_run(project_id)
 
     expected_run = get_next_queued_run()

@@ -16,7 +16,7 @@ def test_bug_report_contains_pytest_failure_details():
     assert "Return code:" in report
     assert "FAILED tests/test_main.py" in report
     assert "TypeError: module object is not callable" in report
-    assert "ONLY Executor JSON actions" in report
+    assert "ONLY an Engineering Plan JSON object" in report
 
 
 def test_bug_report_contains_import_error():

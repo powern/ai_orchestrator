@@ -93,13 +93,19 @@ def test_fix_agent_can_repair_wrong_generated_calculator_test(monkeypatch):
             assert "def divide(a, b):" in user_prompt
 
             return json.dumps(
-                [
-                    {
-                        "action": "write_file",
-                        "path": "tests/test_calculator.py",
-                        "content": fixed_test_code,
-                    }
-                ]
+                {
+                    "schema_version": 1,
+                    "project_summary": "Repair incorrect generated calculator test.",
+                    "steps": [
+                        {
+                            "type": "create_file",
+                            "path": "tests/test_calculator.py",
+                            "purpose": "Calculator regression tests",
+                            "content_description": "Use divide for negative division case",
+                            "content": fixed_test_code,
+                        }
+                    ],
+                }
             )
 
     monkeypatch.setattr(stages, "LLMAdapter", FakeFixLLMAdapter)
@@ -110,12 +116,6 @@ def test_fix_agent_can_repair_wrong_generated_calculator_test(monkeypatch):
         original_coder_output,
         first_result,
     )
-
-    class FakeSanitizerLLMAdapter:
-        def ask(self, model, system_prompt, user_prompt, json_mode=False):
-            return fix_result["output"]
-
-    monkeypatch.setattr(run_pipeline, "LLMAdapter", FakeSanitizerLLMAdapter)
 
     actions, normalized_fix_output = run_pipeline.sanitize_fix_output(run_id, fix_result["output"])
     static_review = StaticReviewerAgent().review(actions)

@@ -541,7 +541,7 @@ def _decisions_from_contract(contract: dict[str, Any]) -> list[str]:
 def _expected_validation_for_consumer(consumer: str) -> list[str]:
     mapping = {
         "architect": ["architecture preserves planner goals"],
-        "coder": ["canonical Executor JSON implements architecture"],
+        "coder": ["Engineering Plan implements architecture and builds canonical actions"],
         "executor": ["executor actions apply cleanly"],
         "tester": ["pytest validates requested behavior"],
         "failure_analyzer": ["root cause is identified from evidence"],

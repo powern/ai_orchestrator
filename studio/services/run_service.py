@@ -154,6 +154,7 @@ def save_stage_output(run_id, field_name, output):
     allowed_fields = {
         "planner_output",
         "architect_output",
+        "engineering_plan",
         "coder_raw_output",
         "coder_output",
         "coder_sanitizer_error",
@@ -192,6 +193,7 @@ def get_stage_output(run_id, field_name):
     allowed_fields = {
         "planner_output",
         "architect_output",
+        "engineering_plan",
         "coder_raw_output",
         "coder_output",
         "coder_sanitizer_error",

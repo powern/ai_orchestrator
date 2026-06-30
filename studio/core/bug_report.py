@@ -17,7 +17,7 @@ STDERR:
 {tester_result.stderr}
 
 Task:
-Fix the generated project by returning ONLY Executor JSON actions.
+Fix the generated project by returning ONLY an Engineering Plan JSON object.
 Do not explain anything.
 Do not use markdown.
 """.strip()

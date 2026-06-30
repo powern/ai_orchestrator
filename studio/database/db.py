@@ -49,6 +49,7 @@ def init_db():
                 current_stage TEXT NOT NULL DEFAULT 'queued',
                 planner_output TEXT,
                 architect_output TEXT,
+                engineering_plan TEXT,
                 coder_raw_output TEXT,
                 coder_output TEXT,
                 coder_sanitizer_error TEXT,

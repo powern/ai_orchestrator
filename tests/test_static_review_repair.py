@@ -26,23 +26,31 @@ PLACEHOLDER_ACTIONS = json.dumps(
     indent=2,
 )
 
-FIXED_ACTIONS = json.dumps(
-    [
-        {
-            "action": "write_file",
-            "path": "app/main.py",
-            "content": "def main():\n    return 'fixed'\n",
-        },
-        {
-            "action": "write_file",
-            "path": "tests/test_main.py",
-            "content": (
-                "from app.main import main\n\n\n"
-                "def test_main():\n"
-                "    assert main() == 'fixed'\n"
-            ),
-        },
-    ],
+FIXED_PLAN = json.dumps(
+    {
+        "schema_version": 1,
+        "project_summary": "Repair placeholder files.",
+        "steps": [
+            {
+                "type": "create_file",
+                "path": "app/main.py",
+                "purpose": "Application entry point",
+                "content_description": "Return fixed value",
+                "content": "def main():\n    return 'fixed'\n",
+            },
+            {
+                "type": "create_file",
+                "path": "tests/test_main.py",
+                "purpose": "Behavior test",
+                "content_description": "Validate fixed value",
+                "content": (
+                    "from app.main import main\n\n\n"
+                    "def test_main():\n"
+                    "    assert main() == 'fixed'\n"
+                ),
+            },
+        ],
+    },
     indent=2,
 )
 
@@ -83,10 +91,13 @@ def test_static_review_fix_prompt_uses_rejected_actions_context(monkeypatch):
         def ask(self, model, system_prompt, user_prompt, json_mode=False):
             assert "Trigger stage:\nstatic_review_failed" in user_prompt
             assert "The workspace may be empty because executor has not run yet." in user_prompt
-            assert "Repair the rejected Executor JSON actions directly." in user_prompt
+            assert (
+                "Repair the rejected built actions by producing an Engineering Plan."
+                in user_prompt
+            )
             assert "Do not rely only on workspace files." in user_prompt
-            assert "Return a complete corrected Executor JSON action list." in user_prompt
-            assert "Rejected Executor actions:" in user_prompt
+            assert "Return a complete corrected Engineering Plan." in user_prompt
+            assert "Rejected built Executor actions:" in user_prompt
             assert "print('Hello, World!')" in user_prompt
             assert "Static review output:" in user_prompt
             assert "Placeholder text found in app/main.py" in user_prompt
@@ -95,7 +106,7 @@ def test_static_review_fix_prompt_uses_rejected_actions_context(monkeypatch):
             assert "Architect output:" in user_prompt
             assert "Files: app/main.py" in user_prompt
             assert '"primary_target": "app/main.py"' in user_prompt
-            return FIXED_ACTIONS
+            return FIXED_PLAN
 
     monkeypatch.setattr(stages, "LLMAdapter", FakeFixAdapter)
 
@@ -118,23 +129,9 @@ def test_static_review_fix_prompt_uses_rejected_actions_context(monkeypatch):
     events = list_events(run_id)
     fix_started = next(event for event in events if event["event_type"] == "fix_started")
 
-    assert result["output"] == FIXED_ACTIONS
+    assert result["output"] == FIXED_PLAN
     assert "after static_review_failed" in fix_started["message"]
     assert "after tester failure" not in fix_started["message"]
-
-
-def fake_sanitize(run_id, fix_output):
-    actions = json.loads(fix_output)
-    normalized = json.dumps(actions, indent=2)
-    save_stage_output(run_id, "fix_output", normalized)
-    run_pipeline.add_event(
-        run_id,
-        "fix_sanitized",
-        "static_reviewer",
-        "Fix output sanitized to Executor JSON.",
-        normalized,
-    )
-    return actions, normalized
 
 
 def test_static_review_fix_success_runs_executor_and_tester(monkeypatch):
@@ -150,9 +147,9 @@ def test_static_review_fix_success_runs_executor_and_tester(monkeypatch):
     def fake_coder(run_id, planner_output, architect_output):
         run_pipeline.add_event(
             run_id,
-            "coder_sanitized",
+            "engineering_plan_generated",
             "coder",
-            "Coder output sanitized to Executor JSON.",
+            "Coder generated a validated Engineering Plan.",
             PLACEHOLDER_ACTIONS,
         )
         return PLACEHOLDER_ACTIONS
@@ -161,7 +158,7 @@ def test_static_review_fix_success_runs_executor_and_tester(monkeypatch):
         assert kwargs["trigger_stage"] == "static_review_failed"
         assert "Placeholder text found in app/main.py" in kwargs["static_review_output"]
         assert "Hello, World!" in kwargs["rejected_actions"]
-        return {"output": FIXED_ACTIONS, "results": None}
+        return {"output": FIXED_PLAN, "results": None}
 
     def fake_tester(run_id, workspace_path):
         run_pipeline.add_event(run_id, "tester_started", "tester", "Tester stage started.")
@@ -170,14 +167,15 @@ def test_static_review_fix_success_runs_executor_and_tester(monkeypatch):
     monkeypatch.setattr(run_pipeline, "run_architect_stage", fake_architect)
     monkeypatch.setattr(run_pipeline, "run_coder_placeholder", fake_coder)
     monkeypatch.setattr(run_pipeline, "run_fix_stage", fake_fix)
-    monkeypatch.setattr(run_pipeline, "sanitize_fix_output", fake_sanitize)
     monkeypatch.setattr(run_pipeline, "run_tester_stage", fake_tester)
 
     RunPipeline(fake_planner).execute(run_id, project)
 
     event_types = [event["event_type"] for event in list_events(run_id)]
 
-    assert event_types.index("coder_sanitized") < event_types.index("static_review_failed")
+    assert event_types.index("engineering_plan_generated") < event_types.index(
+        "static_review_failed"
+    )
     assert event_types.index("static_review_failed") < event_types.index("fix_sanitized")
     assert "fix_completed" in event_types
     assert "static_review_completed_after_fix" in event_types
@@ -199,20 +197,19 @@ def test_static_review_fix_failure_fails_without_pipeline_failed(monkeypatch):
     def fake_coder(run_id, planner_output, architect_output):
         run_pipeline.add_event(
             run_id,
-            "coder_sanitized",
+            "engineering_plan_generated",
             "coder",
-            "Coder output sanitized to Executor JSON.",
+            "Coder generated a validated Engineering Plan.",
             PLACEHOLDER_ACTIONS,
         )
         return PLACEHOLDER_ACTIONS
 
     def fake_fix(*args, **kwargs):
-        return {"output": PLACEHOLDER_ACTIONS, "results": None}
+        return {"output": json.dumps({"schema_version": 1, "steps": []}), "results": None}
 
     monkeypatch.setattr(run_pipeline, "run_architect_stage", fake_architect)
     monkeypatch.setattr(run_pipeline, "run_coder_placeholder", fake_coder)
     monkeypatch.setattr(run_pipeline, "run_fix_stage", fake_fix)
-    monkeypatch.setattr(run_pipeline, "sanitize_fix_output", fake_sanitize)
 
     RunPipeline(fake_planner).execute(run_id, project)
 
@@ -220,10 +217,11 @@ def test_static_review_fix_failure_fails_without_pipeline_failed(monkeypatch):
     event_types = [event["event_type"] for event in list_events(run_id)]
 
     assert run["status"] == "failed"
-    assert run["current_stage"] == "static_review_failed"
+    assert run["current_stage"] == "fix_failed"
     assert "static_review_failed" in event_types
-    assert "fix_sanitized" in event_types
-    assert "fix_completed" in event_types
+    assert "fix_sanitized" not in event_types
+    assert "fix_completed" not in event_types
+    assert "fix_failed" in event_types
     assert "run_failed" in event_types
     assert "pipeline_failed" not in event_types
     assert "executor_started" not in event_types

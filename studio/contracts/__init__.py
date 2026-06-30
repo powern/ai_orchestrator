@@ -4,6 +4,12 @@ from studio.contracts.agent_outputs import (
     FORBIDDEN_ALIASES,
     PROTOCOL_SUMMARY,
 )
+from studio.contracts.engineering_plan import (
+    EngineeringPlan,
+    EngineeringPlanStep,
+    parse_engineering_plan,
+    validate_engineering_plan,
+)
 from studio.contracts.execution import (
     ProjectExecutionContract,
     infer_execution_contract,
@@ -40,6 +46,8 @@ __all__ = [
     "ProtocolValidator",
     "ProtocolViolation",
     "ProjectExecutionContract",
+    "EngineeringPlan",
+    "EngineeringPlanStep",
     "ProjectSpecification",
     "ProjectSpecificationEngine",
     "ValidationReport",
@@ -52,5 +60,7 @@ __all__ = [
     "infer_execution_contract",
     "load_handoff_history",
     "load_latest_handoff",
+    "parse_engineering_plan",
     "validate_execution_contract",
+    "validate_engineering_plan",
 ]

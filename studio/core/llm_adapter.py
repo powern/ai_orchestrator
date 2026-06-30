@@ -1,7 +1,6 @@
 import json
 
 from core.ollama_client import OllamaClient
-from studio.coder.retry import RetryPromptBuilder
 
 
 class LLMAdapter:
@@ -54,16 +53,3 @@ Do not explain anything.
         )
 
         return json.loads(text)
-
-    def ask_retry(self, model, original_output, error):
-        retry_prompt = RetryPromptBuilder().build(
-            original_output=original_output,
-            error=error,
-        )
-
-        return self.ask(
-            model=model,
-            system_prompt="You repair invalid Executor JSON.",
-            user_prompt=retry_prompt,
-            json_mode=True,
-        )

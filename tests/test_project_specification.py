@@ -171,8 +171,21 @@ def test_coder_prompt_includes_project_specification(monkeypatch):
 
     class FakeAdapter:
         def ask(self, model, system_prompt, user_prompt, json_mode=False):
-            prompts["user"] = user_prompt
-            return json.dumps([{"action": "mkdir", "path": "app"}])
+            prompts.setdefault("user", user_prompt)
+            return json.dumps(
+                {
+                    "schema_version": 1,
+                    "project_summary": "Create app directory.",
+                    "steps": [
+                        {
+                            "type": "create_directory",
+                            "path": "app",
+                            "purpose": "Application package",
+                            "content_description": "Package directory",
+                        }
+                    ],
+                }
+            )
 
     init_db()
     migrate()

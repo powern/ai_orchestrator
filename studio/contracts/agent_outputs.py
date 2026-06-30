@@ -11,7 +11,8 @@ FORBIDDEN_ALIASES = {
 PROTOCOL_SUMMARY = """
 Agent Protocol:
 - Preserve original_user_request, non_negotiable_requirements, and acceptance_criteria.
-- Output only canonical Executor JSON actions when actions are requested.
+- Coder outputs an Engineering Plan; the deterministic Action Builder outputs Executor JSON.
+- Output canonical Executor JSON actions only when a stage explicitly requests actions.
 - Canonical action fields are action, path, content, and command.
 - Forbidden aliases: file_path, filename, cmd, body, add_content.
 - Shorthand actions are forbidden: {"mkdir": "app"}, {"run": "pytest"}, {"write_file": ...}.

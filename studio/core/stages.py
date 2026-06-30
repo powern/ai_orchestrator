@@ -1,6 +1,6 @@
 import json
 
-from studio.config.settings import CODER_MAX_OUTPUT_RETRIES, CODER_MAX_SANITIZE_ATTEMPTS
+from studio.config.settings import CODER_MAX_OUTPUT_RETRIES
 from studio.contracts import (
     PROTOCOL_SUMMARY,
     ProtocolValidator,
@@ -8,12 +8,13 @@ from studio.contracts import (
     build_agent_context,
     build_handoff,
 )
+from studio.contracts.engineering_plan import parse_engineering_plan
 from studio.contracts.execution import infer_execution_contract
+from studio.core.action_builder import EngineeringPlanActionBuilder
 from studio.core.executor_schema import validate_executor_actions
 from studio.core.llm_adapter import LLMAdapter
 from studio.core.tester_result import StageTestResult
 from studio.events.publisher import publish_run_event
-from studio.sanitizer.agent import ActionSanitizerAgent
 from studio.services.run_service import get_stage_output, save_stage_output, update_run_status
 
 
@@ -136,18 +137,36 @@ def run_coder_placeholder(run_id, planner_output, architect_output):
     system_prompt = f"""
 You are the Coder Agent of AI Studio.
 
-You must generate ONLY valid JSON.
+You must generate ONLY a valid Engineering Plan JSON object.
 Do not use markdown.
 Do not explain anything.
 Do not add comments.
 
-The JSON root must be an array of executor actions.
+The JSON root must be an object with this shape:
+{{
+  "schema_version": 1,
+  "project_summary": "short implementation summary",
+  "dependencies": ["optional dependency names"],
+  "runtime": {{"kind": "cli|web|library", "entrypoint": "app/main.py"}},
+  "tests": {{"command": "pytest -q"}},
+  "steps": [
+    {{
+      "type": "create_file",
+      "path": "app/main.py",
+      "purpose": "Application entry point",
+      "content_description": "What this file implements",
+      "content": "Complete file content",
+      "depends_on": []
+    }},
+    {{"type": "run_tests"}}
+  ]
+}}
 
-Supported actions:
-- mkdir
-- write_file
-- read_file
-- run
+Supported Engineering Plan step types:
+- create_directory
+- create_file
+- run_command
+- run_tests
 
 Safety rules:
 - All paths must be relative.
@@ -155,6 +174,8 @@ Safety rules:
 - Do not use path traversal.
 - Do not modify AI Studio directly.
 - Generate files only for the target project workspace.
+- Do not emit Executor JSON actions such as mkdir/write_file/read_file/run.
+- The deterministic Action Builder will create Executor JSON.
 
 Prefer creating a minimal working Python project with tests.
 
@@ -194,7 +215,7 @@ Architect output:
 
 {architect_output}
 
-Generate executor actions now.
+Generate the Engineering Plan now.
 """
 
     adapter = LLMAdapter()
@@ -210,27 +231,20 @@ Generate executor actions now.
     except json.JSONDecodeError:
         pass
 
-    sanitizer = ActionSanitizerAgent(
-        adapter=adapter,
-        model=DEFAULT_MODELS["coder"],
-    )
-
     current_raw_output = coder_raw_output
     last_error = None
-    invalid_sanitized_actions = None
+    plan = None
+    actions = None
 
     for retry_number in range(0, CODER_MAX_OUTPUT_RETRIES + 1):
-        invalid_sanitized_actions = None
         try:
-            pipeline_result = sanitizer.process(
-                current_raw_output,
-                max_attempts=CODER_MAX_SANITIZE_ATTEMPTS,
-            )
-            validate_executor_actions(pipeline_result.actions)
+            plan = parse_engineering_plan(current_raw_output)
+            plan_json = plan.to_json()
+            actions = EngineeringPlanActionBuilder().build(plan)
+            validate_executor_actions(actions)
             break
         except Exception as exc:
             last_error = exc
-            invalid_sanitized_actions = getattr(exc, "invalid_actions", None)
             save_stage_output(run_id, "coder_sanitizer_error", str(exc))
 
             if retry_number >= CODER_MAX_OUTPUT_RETRIES:
@@ -238,14 +252,14 @@ Generate executor actions now.
                     run_id,
                     "failed",
                     "coder_failed",
-                    f"Coder output could not be sanitized: {exc}",
+                    f"Engineering Plan could not be validated or built: {exc}",
                 )
 
                 add_event(
                     run_id,
                     "coder_failed",
                     "coder_failed",
-                    "Coder output could not be sanitized after retries.",
+                    "Engineering Plan could not be validated or built after retries.",
                     str(exc),
                 )
 
@@ -253,7 +267,7 @@ Generate executor actions now.
                     run_id,
                     "run_failed",
                     "coder_failed",
-                    "Run failed because coder output was invalid after retries.",
+                    "Run failed because Engineering Plan was invalid after retries.",
                     str(exc),
                 )
 
@@ -263,33 +277,37 @@ Generate executor actions now.
                 run_id,
                 "coder_retry",
                 "coder",
-                f"Coder retry #{retry_number + 1} after sanitizer error.",
+                f"Coder retry #{retry_number + 1} after Engineering Plan validation error.",
                 str(exc),
             )
 
-            current_raw_output = ask_coder_retry(
+            current_raw_output = ask_engineering_plan_retry(
                 adapter=adapter,
                 model=DEFAULT_MODELS["coder"],
                 previous_raw_output=current_raw_output,
                 error=exc,
-                invalid_sanitized_actions=invalid_sanitized_actions,
             )
     else:
         raise last_error
 
-    normalized_output = json.dumps(
-        pipeline_result.program.to_dicts(),
-        ensure_ascii=False,
-        indent=2,
-    )
+    normalized_output = json.dumps(actions, ensure_ascii=False, indent=2)
 
+    save_stage_output(run_id, "engineering_plan", plan_json)
     save_stage_output(run_id, "coder_output", normalized_output)
 
     add_event(
         run_id,
-        "coder_sanitized",
+        "engineering_plan_generated",
         "coder",
-        "Coder output sanitized to Executor JSON.",
+        "Coder generated a validated Engineering Plan.",
+        plan_json,
+    )
+
+    add_event(
+        run_id,
+        "action_builder_completed",
+        "coder",
+        "Deterministic Action Builder converted Engineering Plan to Executor JSON.",
         normalized_output,
     )
 
@@ -298,8 +316,8 @@ Generate executor actions now.
         "coder_completed",
         "coder",
         (
-            "LLM Coder completed. "
-            f"Attempts: {pipeline_result.attempts}, retried: {pipeline_result.retried}."
+            "LLM Coder completed through Engineering Plan. "
+            f"Attempts: {retry_number + 1}, retried: {retry_number > 0}."
         ),
         normalized_output,
     )
@@ -308,11 +326,13 @@ Generate executor actions now.
         "coder",
         "coder",
         "executor",
-        "Implementation plan converted to canonical Executor actions.",
+        "Engineering Plan converted to canonical Executor actions.",
         agent_context=agent_context,
         implementation_contract={
-            "output": "canonical_executor_actions",
-            "action_source": "coder",
+            "output": "engineering_plan",
+            "builder_output": "canonical_executor_actions",
+            "action_source": "deterministic_action_builder",
+            "engineering_plan": plan.to_dict(),
         },
         recommended_focus=["execute generated actions", "preserve original requirements"],
     )
@@ -320,22 +340,16 @@ Generate executor actions now.
     return normalized_output
 
 
-def ask_coder_retry(
+def ask_engineering_plan_retry(
     adapter,
     model,
     previous_raw_output: str,
     error: Exception,
-    invalid_sanitized_actions=None,
 ) -> str:
-    invalid_actions_text = (
-        json.dumps(invalid_sanitized_actions, ensure_ascii=False, indent=2)
-        if invalid_sanitized_actions is not None
-        else "not available"
-    )
     system_prompt = f"""
 You are the Coder Agent of AI Studio.
 
-Return ONLY valid Executor JSON.
+Return ONLY a valid Engineering Plan JSON object.
 Do not use markdown.
 Do not explain anything.
 
@@ -345,47 +359,25 @@ Agent Protocol:
 
     user_prompt = f"""
 Your previous response could not be parsed.
-It may also have failed Executor Action Schema validation.
+It may also have failed Engineering Plan validation or deterministic Action Builder validation.
 
-Return ONLY Executor JSON.
+Return ONLY an Engineering Plan JSON object.
 Do not use markdown.
 Do not explain.
 
-Strict Executor JSON contract:
-- Root must be a JSON array.
-- Every item must be an object.
-- Output MUST be valid JSON.
-- Output MUST contain ONLY Executor JSON.
-- No markdown.
-- No ``` blocks.
-- No Python literals.
-- Do not use triple quoted strings.
-- Every file content must be a normal JSON string.
-- Escape newlines with \\n.
-- Escape quotes inside strings with \\".
-- Do not invent new action types.
-- Supported actions are ONLY: mkdir, write_file, read_file, run.
-- mkdir requires string fields: action, path.
-- write_file requires string fields: action, path, content.
-- read_file requires string fields: action, path.
-- run requires string fields: action, command.
+Strict Engineering Plan contract:
+- Root must be a JSON object.
+- schema_version must be 1.
+- steps must be a non-empty array.
+- Do not output Executor actions such as mkdir/write_file/read_file/run.
+- Supported step types are create_directory, create_file, run_command, run_tests.
+- create_file requires path, purpose, content_description, and complete content.
 - Paths must be relative and must not contain traversal.
-- Do not put objects or arrays inside path, content, or command.
-- Replace unsupported actions such as install_packages with supported Executor actions.
-
-BAD:
-"content": \"\"\"
-print("Hello")
-\"\"\"
-
-GOOD:
-"content": "print(\\"Hello\\")\\nprint(\\"World\\")\\n"
+- File content must be valid JSON string content with escaped newlines.
+- The Action Builder will create mkdir/write_file/run actions.
 
 Previous parser error:
 {error}
-
-Invalid sanitized actions:
-{invalid_actions_text}
 
 Previous raw response:
 {previous_raw_output}
@@ -400,7 +392,7 @@ Previous raw response:
 
 
 def run_executor_stage(run_id, workspace_path, coder_output):
-    from studio.core.json_utils import normalize_coder_json
+    from studio.core.action_builder import parse_executor_actions_json
     from studio.executor.actions import execute_actions
 
     update_run_status(run_id, "running", "executor")
@@ -412,7 +404,7 @@ def run_executor_stage(run_id, workspace_path, coder_output):
         "Executor stage started.",
     )
 
-    actions = normalize_coder_json(coder_output)
+    actions = parse_executor_actions_json(coder_output)
     results = execute_actions(workspace_path, actions)
     result_text = str(results)
 
@@ -764,13 +756,13 @@ def run_fix_stage(
         fix_prompt = f"""
 {fix_prompt}
 
-Previous Fix Agent response could not be sanitized.
+Previous Fix Agent response could not be built.
 
-Return ONLY Executor JSON actions.
+Return ONLY an Engineering Plan JSON object.
 Do not use markdown.
 Do not explain.
 
-Previous sanitizer error:
+Previous Engineering Plan or Action Builder error:
 {previous_error}
 
 Previous raw Fix Agent response:
@@ -779,7 +771,7 @@ Previous raw Fix Agent response:
 
     fix_output = adapter.ask(
         model=DEFAULT_MODELS["coder"],
-        system_prompt="You fix generated projects by returning Executor JSON only.",
+        system_prompt="You fix generated projects by returning Engineering Plan JSON only.",
         user_prompt=fix_prompt,
         json_mode=True,
     )
@@ -794,7 +786,7 @@ Previous raw Fix Agent response:
         run_id,
         "fix_generated",
         "fix",
-        "Fix actions generated.",
+        "Fix Engineering Plan generated.",
         fix_output,
     )
     record_agent_handoff(
@@ -805,7 +797,8 @@ Previous raw Fix Agent response:
         "Fix Agent generated repair actions for the planned targets.",
         agent_context=agent_context,
         implementation_contract={
-            "output": "canonical_executor_actions",
+            "output": "engineering_plan",
+            "builder_output": "canonical_executor_actions",
             "trigger_stage": trigger_stage,
             "project_execution_contract": execution_contract,
         },

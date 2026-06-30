@@ -31,6 +31,7 @@ migrate()
 STAGE_OUTPUT_FIELDS = [
     "planner_output",
     "architect_output",
+    "engineering_plan",
     "coder_raw_output",
     "coder_sanitizer_error",
     "coder_output",

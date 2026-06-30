@@ -35,7 +35,7 @@ def test_run_coder_placeholder_saves_json_output_and_events(monkeypatch):
 
     class FakeLLMAdapter:
         def ask(self, model, system_prompt, user_prompt, json_mode=False):
-            if "Generate executor actions now" in user_prompt:
+            if "Generate the Engineering Plan now" in user_prompt:
                 assert "python app/main.py" in system_prompt
                 assert 'app.run(host="0.0.0.0", port=5000)' in system_prompt
                 assert "redirect, url_for, or render_template_string" in system_prompt
@@ -43,12 +43,18 @@ def test_run_coder_placeholder_saves_json_output_and_events(monkeypatch):
                 assert "Increase" in system_prompt
                 assert "RUN.md" in system_prompt
             return """
-            [
-              {
-                "action": "mkdir",
-                "path": "fake_llm_app"
-              }
-            ]
+            {
+              "schema_version": 1,
+              "project_summary": "Create a minimal app directory.",
+              "steps": [
+                {
+                  "type": "create_directory",
+                  "path": "fake_llm_app",
+                  "purpose": "Application directory",
+                  "content_description": "Empty directory"
+                }
+              ]
+            }
             """
 
     monkeypatch.setattr(stages, "LLMAdapter", FakeLLMAdapter)
@@ -74,9 +80,12 @@ def test_run_coder_placeholder_saves_json_output_and_events(monkeypatch):
 
     assert '"action": "mkdir"' in output
     assert '"path": "fake_llm_app"' in output
+    assert run["engineering_plan"]
     assert run["current_stage"] == "coder"
     assert run["coder_output"] == output
     assert "coder_started" in event_types
+    assert "engineering_plan_generated" in event_types
+    assert "action_builder_completed" in event_types
     assert "coder_completed" in event_types
 
 

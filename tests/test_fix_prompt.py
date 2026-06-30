@@ -19,11 +19,11 @@ def test_fix_prompt_contains_test_failure_and_original_output():
     assert "FAILED tests/test_main.py" in prompt
     assert "TypeError: module object is not callable" in prompt
     assert "Original coder output:" in prompt
-    assert "Return fix actions now." in prompt
-    assert "ONLY Executor JSON actions" in prompt
+    assert "Return the fix Engineering Plan now." in prompt
+    assert "ONLY an Engineering Plan JSON object" in prompt
 
 
-def test_fix_prompt_mentions_supported_actions():
+def test_fix_prompt_mentions_supported_engineering_plan_steps():
     tester_result = StageTestResult(
         success=False,
         returncode=1,
@@ -36,10 +36,10 @@ def test_fix_prompt_mentions_supported_actions():
         tester_result=tester_result,
     )
 
-    assert "mkdir" in prompt
-    assert "write_file" in prompt
-    assert "read_file" in prompt
-    assert "run" in prompt
+    assert "create_directory" in prompt
+    assert "create_file" in prompt
+    assert "run_command" in prompt
+    assert "run_tests" in prompt
 
 
 def test_fix_prompt_contains_module_callable_hint():

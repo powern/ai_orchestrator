@@ -45,6 +45,9 @@ def migrate():
         if "coder_raw_output" not in columns:
             conn.execute("ALTER TABLE runs ADD COLUMN coder_raw_output TEXT")
 
+        if "engineering_plan" not in columns:
+            conn.execute("ALTER TABLE runs ADD COLUMN engineering_plan TEXT")
+
         if "coder_sanitizer_error" not in columns:
             conn.execute("ALTER TABLE runs ADD COLUMN coder_sanitizer_error TEXT")
 

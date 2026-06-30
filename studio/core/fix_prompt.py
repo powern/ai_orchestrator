@@ -171,7 +171,7 @@ class FixPromptBuilder:
         executor_context = executor_output or "No executor output was available."
         repair_context = repair_plan or "No repair plan was available."
         static_review_context = static_review_output or "No static review output was available."
-        rejected_actions_context = rejected_actions or "No rejected Executor actions were provided."
+        rejected_actions_context = rejected_actions or "No rejected built actions were provided."
         coder_raw_context = coder_raw_output or "No raw coder output was available."
         planner_context = planner_output or "No planner output was available."
         architect_context = architect_output or "No architect output was available."
@@ -187,10 +187,10 @@ class FixPromptBuilder:
             static_review_instructions = """
 Static review repair mode:
 - The workspace may be empty because executor has not run yet.
-- Repair the rejected Executor JSON actions directly.
+- Repair the rejected built actions by producing an Engineering Plan.
 - Do not rely only on workspace files.
-- Return a complete corrected Executor JSON action list.
-- Remove placeholder text and unsafe patterns from the rejected actions.
+- Return a complete corrected Engineering Plan.
+- Remove placeholder text and unsafe patterns from generated files.
 """.strip()
 
         return f"""
@@ -198,7 +198,7 @@ The generated project failed validation or tests.
 The generated project failed its tests.
 The generated project failed its tests or static review.
 
-You must return ONLY Executor JSON actions that implement the repair plan.
+You must return ONLY an Engineering Plan JSON object that implements the repair plan.
 Do not explain anything.
 Do not use markdown.
 Use Validation Report violation IDs, severity, affected files, evidence, and repair_hint
@@ -238,7 +238,7 @@ Original coder output:
 Raw coder output:
 {coder_raw_context}
 
-Rejected Executor actions:
+Rejected built Executor actions:
 {rejected_actions_context}
 
 Static review output:
@@ -256,7 +256,7 @@ Repair plan:
 Repair strategy:
 - Prioritize the repair plan primary_target.
 - Repair production code before tests by default.
-- If primary_target is an app/ file, include a write_file action for that file unless
+- If primary_target is an app/ file, include a create_file step for that file unless
   the repair plan clearly says the tests are wrong.
 - Treat tests/ files as secondary targets.
 - Modify tests only when the test assertion/import is wrong, requirements changed, or
@@ -278,12 +278,13 @@ Current relevant workspace files:
 {workspace_context}
 
 Rules:
-- Return a JSON array.
-- Use only supported actions: mkdir, write_file, read_file, run.
-- Prefer write_file actions to replace broken files.
+- Return a JSON object with schema_version, project_summary, tests, and steps.
+- Use only supported Engineering Plan step types:
+  create_directory, create_file, run_command, run_tests.
+- Prefer create_file steps to replace broken files.
 - Implement the repair plan primary target before secondary targets.
 - If implementation is correct and a generated test assertion is wrong, fix the test,
-  but explain this choice only through the selected Executor actions.
+  but explain this choice only through the selected Engineering Plan steps.
 - Do not invent package roots or import paths.
 - Follow the Project Execution Contract for build, run, test, and module semantics.
 - Treat the Project Execution Contract as protected unless traceback evidence proves it wrong.
@@ -316,7 +317,7 @@ Important Flask visual app readiness hints:
   Counter: 1, and reset back to Counter: 0.
 - Add RUN.md with install, run, and open-browser instructions for visual apps.
 
-Return fix actions now.
+Return the fix Engineering Plan now.
 """.strip()
 
     def _format_workspace_files(self, workspace_files: list[WorkspaceFileContext]) -> str:

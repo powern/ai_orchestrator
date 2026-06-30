@@ -21,6 +21,21 @@ VALID_ACTIONS = [
 ]
 
 
+VALID_PLAN = {
+    "schema_version": 1,
+    "project_summary": "Create minimal app.",
+    "steps": [
+        {
+            "type": "create_file",
+            "path": "app/main.py",
+            "purpose": "Application entry point",
+            "content_description": "main returns ok",
+            "content": "def main():\n    return 'ok'\n",
+        }
+    ],
+}
+
+
 class RecordingAdapter:
     def __init__(self):
         self.calls = 0
@@ -29,7 +44,69 @@ class RecordingAdapter:
     def ask(self, model, system_prompt, user_prompt, json_mode=False):
         self.calls += 1
         self.prompts.append(user_prompt)
-        return json.dumps([{"action": "write_file", "path": "app/main.py", "content": "raw"}])
+        return json.dumps(VALID_PLAN)
+
+
+class InvalidThenValidPlanAdapter:
+    def __init__(self):
+        self.calls = 0
+        self.prompts = []
+
+    def ask(self, model, system_prompt, user_prompt, json_mode=False):
+        self.calls += 1
+        self.prompts.append(user_prompt)
+        if self.calls == 1:
+            return json.dumps(
+                {
+                    "schema_version": 1,
+                    "steps": [
+                        {
+                            "type": "create_file",
+                            "path": "app/main.py",
+                            "purpose": "Missing content",
+                            "content_description": "Invalid plan",
+                        }
+                    ],
+                }
+            )
+        return json.dumps(VALID_PLAN)
+
+
+class UnsupportedStepThenValidPlanAdapter(InvalidThenValidPlanAdapter):
+    def ask(self, model, system_prompt, user_prompt, json_mode=False):
+        self.calls += 1
+        self.prompts.append(user_prompt)
+        if self.calls == 1:
+            return json.dumps(
+                {
+                    "schema_version": 1,
+                    "steps": [
+                        {
+                            "type": "install_packages",
+                            "purpose": "Invalid step",
+                        }
+                    ],
+                }
+            )
+        return json.dumps(VALID_PLAN)
+
+
+class AlwaysInvalidPlanAdapter(InvalidThenValidPlanAdapter):
+    def ask(self, model, system_prompt, user_prompt, json_mode=False):
+        self.calls += 1
+        self.prompts.append(user_prompt)
+        return json.dumps(
+            {
+                "schema_version": 1,
+                "steps": [
+                    {
+                        "type": "create_file",
+                        "path": "app/main.py",
+                        "purpose": "Still missing content",
+                    }
+                ],
+            }
+        )
 
 
 class RetrySchemaSanitizer:
@@ -131,10 +208,8 @@ def create_schema_retry_run():
 
 
 def test_coder_retries_after_executor_schema_validation_failure(monkeypatch):
-    adapter = RecordingAdapter()
-    RetrySchemaSanitizer.calls = 0
+    adapter = InvalidThenValidPlanAdapter()
     monkeypatch.setattr(stages, "LLMAdapter", lambda: adapter)
-    monkeypatch.setattr(stages, "ActionSanitizerAgent", RetrySchemaSanitizer)
 
     init_db()
     migrate()
@@ -146,24 +221,18 @@ def test_coder_retries_after_executor_schema_validation_failure(monkeypatch):
     event_types = [event["event_type"] for event in list_events(run_id)]
 
     assert output is not None
-    assert event_types == [
-        "coder_started",
-        "agent_context_built",
-        "coder_retry",
-        "coder_sanitized",
-        "coder_completed",
-        "agent_handoff_recorded",
-    ]
+    assert "coder_retry" in event_types
+    assert "engineering_plan_generated" in event_types
+    assert "action_builder_completed" in event_types
+    assert "coder_completed" in event_types
     assert "pipeline_failed" not in event_types
-    assert "mkdir.path expected str, got dict" in adapter.prompts[-1]
-    assert "Invalid sanitized actions:" in adapter.prompts[-1]
+    assert "create_file step at index 0 must include content" in adapter.prompts[-1]
+    assert "Strict Engineering Plan contract" in adapter.prompts[-1]
 
 
 def test_coder_retry_rejects_unsupported_executor_action(monkeypatch):
-    adapter = RecordingAdapter()
-    UnsupportedActionThenValidSanitizer.calls = 0
+    adapter = UnsupportedStepThenValidPlanAdapter()
     monkeypatch.setattr(stages, "LLMAdapter", lambda: adapter)
-    monkeypatch.setattr(stages, "ActionSanitizerAgent", UnsupportedActionThenValidSanitizer)
 
     init_db()
     migrate()
@@ -177,15 +246,16 @@ def test_coder_retry_rejects_unsupported_executor_action(monkeypatch):
 
     assert output is not None
     assert "coder_retry" in event_types
-    assert "Unknown executor action: install_packages" in retry_prompt
-    assert "Supported actions are ONLY: mkdir, write_file, read_file, run" in retry_prompt
-    assert "Replace unsupported actions such as install_packages" in retry_prompt
-    assert "Do not invent new action types" in retry_prompt
+    assert "Unsupported Engineering Plan step type at index 0: install_packages" in retry_prompt
+    assert (
+        "Supported step types are create_directory, create_file, run_command, run_tests"
+        in retry_prompt
+    )
+    assert "Do not output Executor actions" in retry_prompt
 
 
 def test_coder_fails_after_all_executor_schema_retries(monkeypatch):
-    monkeypatch.setattr(stages, "LLMAdapter", RecordingAdapter)
-    monkeypatch.setattr(stages, "ActionSanitizerAgent", AlwaysInvalidSchemaSanitizer)
+    monkeypatch.setattr(stages, "LLMAdapter", AlwaysInvalidPlanAdapter)
 
     init_db()
     migrate()
@@ -203,16 +273,14 @@ def test_coder_fails_after_all_executor_schema_retries(monkeypatch):
     assert event_types.count("coder_retry") == CODER_MAX_OUTPUT_RETRIES
     assert "coder_failed" in event_types
     assert "run_failed" in event_types
-    assert "coder_sanitized" not in event_types
+    assert "engineering_plan_generated" not in event_types
+    assert "action_builder_completed" not in event_types
     assert "pipeline_failed" not in event_types
 
 
 def test_fix_retries_after_executor_schema_validation_failure(monkeypatch):
-    adapter = RecordingAdapter()
-    RetrySchemaSanitizer.calls = 0
+    adapter = InvalidThenValidPlanAdapter()
     monkeypatch.setattr(stages, "LLMAdapter", lambda: adapter)
-    monkeypatch.setattr(run_pipeline, "LLMAdapter", lambda: adapter)
-    monkeypatch.setattr(run_pipeline, "ActionSanitizerAgent", RetrySchemaSanitizer)
 
     run_id, workspace, tester_result = create_schema_retry_run()
     fix_result = run_fix_stage(run_id, str(workspace), "[]", tester_result)
@@ -242,9 +310,7 @@ def test_fix_retries_after_executor_schema_validation_failure(monkeypatch):
 
 
 def test_fix_fails_after_all_executor_schema_retries(monkeypatch):
-    monkeypatch.setattr(stages, "LLMAdapter", RecordingAdapter)
-    monkeypatch.setattr(run_pipeline, "LLMAdapter", RecordingAdapter)
-    monkeypatch.setattr(run_pipeline, "ActionSanitizerAgent", AlwaysInvalidSchemaSanitizer)
+    monkeypatch.setattr(stages, "LLMAdapter", AlwaysInvalidPlanAdapter)
 
     run_id, workspace, tester_result = create_schema_retry_run()
     fix_result = run_fix_stage(run_id, str(workspace), "[]", tester_result)

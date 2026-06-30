@@ -2,14 +2,14 @@ import inspect
 import json
 
 from studio.config.settings import (
-    DEFAULT_MODELS,
     FIX_MAX_OUTPUT_RETRIES,
-    FIX_MAX_SANITIZE_ATTEMPTS,
 )
 from studio.contracts.project_specification import build_project_specification
+from studio.core.action_builder import (
+    build_actions_from_engineering_plan_text,
+    parse_executor_actions_json,
+)
 from studio.core.executor_schema import validate_executor_actions
-from studio.core.json_utils import normalize_coder_json
-from studio.core.llm_adapter import LLMAdapter
 from studio.core.project_state import ProjectStateBuilder
 from studio.core.runtime_readiness import RuntimeReadinessValidator
 from studio.core.stages import (
@@ -23,7 +23,6 @@ from studio.core.tester_result import StageTestResult
 from studio.database.db import get_connection
 from studio.events.publisher import publish_run_event
 from studio.reviewer.static_agent import StaticReviewerAgent
-from studio.sanitizer.agent import ActionSanitizerAgent
 from studio.services.engineering_service import record_engineering_shadow_assessment
 from studio.services.run_service import (
     save_stage_output,
@@ -62,26 +61,15 @@ def get_project_id_for_run(run_id):
 
 
 def sanitize_fix_output(run_id, fix_output):
-    sanitizer = ActionSanitizerAgent(
-        adapter=LLMAdapter(),
-        model=DEFAULT_MODELS["coder"],
-    )
-
     try:
-        result = sanitizer.process(
-            fix_output,
-            max_attempts=FIX_MAX_SANITIZE_ATTEMPTS,
-        )
+        actions, plan_json = build_actions_from_engineering_plan_text(fix_output)
     except Exception as exc:
         save_stage_output(run_id, "fix_sanitizer_error", str(exc))
         raise
 
-    normalized_output = json.dumps(
-        result.actions,
-        ensure_ascii=False,
-        indent=2,
-    )
-    validate_executor_actions(result.actions)
+    save_stage_output(run_id, "fix_raw_output", plan_json)
+    normalized_output = json.dumps(actions, ensure_ascii=False, indent=2)
+    validate_executor_actions(actions)
 
     save_stage_output(run_id, "fix_output", normalized_output)
 
@@ -89,11 +77,11 @@ def sanitize_fix_output(run_id, fix_output):
         run_id,
         "fix_sanitized",
         "static_reviewer",
-        "Fix output sanitized to Executor JSON.",
+        "Fix Engineering Plan built to Executor JSON.",
         normalized_output,
     )
 
-    return result.actions, normalized_output
+    return actions, normalized_output
 
 
 def sanitize_fix_output_or_fail(
@@ -120,14 +108,14 @@ def sanitize_fix_output_or_fail(
                     run_id,
                     "failed",
                     "fix_failed",
-                    f"Fix output could not be sanitized: {exc}",
+                    f"Fix Engineering Plan could not be built: {exc}",
                 )
 
                 add_event(
                     run_id,
                     "fix_failed",
                     "fix_failed",
-                    "Fix output could not be sanitized after retries.",
+                    "Fix Engineering Plan could not be built after retries.",
                     str(exc),
                 )
 
@@ -135,7 +123,7 @@ def sanitize_fix_output_or_fail(
                     run_id,
                     "run_failed",
                     "fix_failed",
-                    "Run failed because fix output was invalid.",
+                    "Run failed because Fix Engineering Plan was invalid.",
                     str(exc),
                 )
 
@@ -145,7 +133,7 @@ def sanitize_fix_output_or_fail(
                 run_id,
                 "fix_retry",
                 "fix",
-                f"Fix retry #{retry_number + 1} after sanitizer error.",
+                f"Fix retry #{retry_number + 1} after Engineering Plan build error.",
                 str(exc),
             )
 
@@ -171,7 +159,7 @@ def sanitize_fix_output_or_fail(
             run_id,
             "fix_completed",
             "fix",
-            "Fix output sanitized and ready for static review.",
+            "Fix Engineering Plan built and ready for static review.",
             sanitized_fix[1],
         )
         return sanitized_fix
@@ -343,7 +331,7 @@ class RunPipeline:
             maybe_record_engineering_shadow()
             return
 
-        coder_actions = normalize_coder_json(coder_output)
+        coder_actions = parse_executor_actions_json(coder_output)
         static_project_state = ProjectStateBuilder().build(
             run_id=run_id,
             project_id=project_id,

@@ -1,5 +1,3 @@
-from types import SimpleNamespace
-
 import pytest
 
 from studio.core import stages
@@ -10,7 +8,12 @@ from studio.services.event_service import list_events
 from studio.services.project_service import create_project
 from studio.services.run_service import create_run, get_run
 
-VALID_ACTIONS = '[{"action":"mkdir","path":"app"}]'
+VALID_PLAN = (
+    '{"schema_version":1,"project_summary":"Create app",'
+    '"steps":[{"type":"create_directory","path":"app",'
+    '"purpose":"Application directory","content_description":"Package directory"}]}'
+)
+VALID_ACTIONS = '[\n  {\n    "action": "mkdir",\n    "path": "app"\n  }\n]'
 
 
 class RetryThenSuccessAdapter:
@@ -26,11 +29,11 @@ class RetryThenSuccessAdapter:
             if "Your previous response could not be parsed." in user_prompt:
                 self.retry_prompts.append(user_prompt)
                 self.retry_returned = True
-                return VALID_ACTIONS
+                return VALID_PLAN
             return self.initial_raw_output
 
         if self.retry_returned:
-            return VALID_ACTIONS
+            return VALID_PLAN
 
         return self.initial_raw_output
 
@@ -46,27 +49,7 @@ class AlwaysInvalidAdapter:
         ):
             self.retry_prompts.append(user_prompt)
 
-        return '[{"action":"write_file","path":"app/main.py","content":"unterminated}'
-
-
-class FailOnceThenValidSanitizer:
-    calls = 0
-
-    def __init__(self, adapter, model):
-        pass
-
-    def process(self, coder_output, max_attempts=2):
-        type(self).calls += 1
-        if type(self).calls == 1:
-            raise ValueError("Expecting ',' delimiter")
-
-        actions = [{"action": "mkdir", "path": "app"}]
-        return SimpleNamespace(
-            actions=actions,
-            attempts=1,
-            retried=False,
-            program=SimpleNamespace(to_dicts=lambda: actions),
-        )
+        return '{"schema_version":1,"steps":[{"type":"create_file","path":"app/main.py"'
 
 
 def create_run_for_coder_stage(description="Build a small app"):
@@ -80,9 +63,9 @@ def create_run_for_coder_stage(description="Build a small app"):
     "raw_output",
     [
         '{"action":"mkdir","path":"app"}',
-        '[{"action":"write_file","path":"app/main.py","content":"127.0.0',
-        '```json\n[{"action":"mkdir","path":"app"}]\n```\nextra text',
-        '[{"action":"mkdir","path":"app"}]\n\nFiles:\n- app/__init__.py',
+        '{"schema_version":1,"steps":[{"type":"create_file","path":"app/main.py"}]}',
+        '```json\n{"schema_version":1,"steps":[]}\n```\nextra text',
+        '{"schema_version":1,"steps":[]}\n\nFiles:\n- app/__init__.py',
     ],
 )
 def test_coder_stage_retries_malformed_output_then_succeeds(monkeypatch, raw_output):
@@ -97,7 +80,7 @@ def test_coder_stage_retries_malformed_output_then_succeeds(monkeypatch, raw_out
     events = list_events(run_id)
     event_types = [event["event_type"] for event in events]
 
-    assert output == '[\n  {\n    "action": "mkdir",\n    "path": "app"\n  }\n]'
+    assert output == VALID_ACTIONS
     assert run["coder_raw_output"] == raw_output
     assert run["coder_output"] == output
     assert "coder_retry" in event_types
@@ -135,14 +118,13 @@ def test_coder_stage_fails_cleanly_after_three_invalid_retries(monkeypatch):
 
 def test_coder_retry_prompt_rejects_triple_quoted_content(monkeypatch):
     raw_output = (
-        '[{"action":"write_file","path":"app/main.py","content": """\n'
+        '{"schema_version":1,"steps":[{"type":"create_file","path":"app/main.py",'
+        '"content": """\n'
         "print(\"Hello\")\n"
-        '"""}]'
+        '"""}]}'
     )
     adapter = RetryThenSuccessAdapter(raw_output)
-    FailOnceThenValidSanitizer.calls = 0
     monkeypatch.setattr(stages, "LLMAdapter", lambda: adapter)
-    monkeypatch.setattr(stages, "ActionSanitizerAgent", FailOnceThenValidSanitizer)
 
     run_id = create_run_for_coder_stage()
 
@@ -151,7 +133,6 @@ def test_coder_retry_prompt_rejects_triple_quoted_content(monkeypatch):
     assert output is not None
     assert adapter.retry_prompts
     prompt = adapter.retry_prompts[0]
-    assert "Do not use triple quoted strings" in prompt
-    assert "Escape newlines with \\n" in prompt
-    assert "Every file content must be a normal JSON string" in prompt
-    assert "No Python literals" in prompt
+    assert "Strict Engineering Plan contract" in prompt
+    assert "File content must be valid JSON string content with escaped newlines" in prompt
+    assert "Do not output Executor actions" in prompt

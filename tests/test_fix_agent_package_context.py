@@ -129,38 +129,54 @@ def test_fix_agent_uses_workspace_tree_for_nested_app_package_imports(monkeypatc
             assert ".pyc" not in user_prompt
 
             return json.dumps(
-                [
-                    {
-                        "action": "write_file",
-                        "path": "app/application/__init__.py",
-                        "content": "",
-                    },
-                    {
-                        "action": "write_file",
-                        "path": "app/domain/__init__.py",
-                        "content": "",
-                    },
-                    {
-                        "action": "write_file",
-                        "path": "app/infrastructure/__init__.py",
-                        "content": "",
-                    },
-                    {
-                        "action": "write_file",
-                        "path": "app/main.py",
-                        "content": fixed_main,
-                    },
-                    {
-                        "action": "write_file",
-                        "path": "app/application/calculator.py",
-                        "content": fixed_calculator,
-                    },
-                    {
-                        "action": "write_file",
-                        "path": "tests/test_calculator.py",
-                        "content": fixed_test,
-                    },
-                ]
+                {
+                    "schema_version": 1,
+                    "project_summary": "Repair nested app package imports.",
+                    "steps": [
+                        {
+                            "type": "create_file",
+                            "path": "app/application/__init__.py",
+                            "purpose": "Application package marker",
+                            "content_description": "Make app.application importable",
+                            "content": "",
+                        },
+                        {
+                            "type": "create_file",
+                            "path": "app/domain/__init__.py",
+                            "purpose": "Domain package marker",
+                            "content_description": "Make app.domain importable",
+                            "content": "",
+                        },
+                        {
+                            "type": "create_file",
+                            "path": "app/infrastructure/__init__.py",
+                            "purpose": "Infrastructure package marker",
+                            "content_description": "Make app.infrastructure importable",
+                            "content": "",
+                        },
+                        {
+                            "type": "create_file",
+                            "path": "app/main.py",
+                            "purpose": "Application entry point",
+                            "content_description": "Use app-rooted imports",
+                            "content": fixed_main,
+                        },
+                        {
+                            "type": "create_file",
+                            "path": "app/application/calculator.py",
+                            "purpose": "Calculator domain service",
+                            "content_description": "Use app-rooted domain import",
+                            "content": fixed_calculator,
+                        },
+                        {
+                            "type": "create_file",
+                            "path": "tests/test_calculator.py",
+                            "purpose": "Entrypoint test",
+                            "content_description": "Import main through app package root",
+                            "content": fixed_test,
+                        },
+                    ],
+                }
             )
 
     monkeypatch.setattr(stages, "LLMAdapter", FakeFixLLMAdapter)
@@ -171,12 +187,6 @@ def test_fix_agent_uses_workspace_tree_for_nested_app_package_imports(monkeypatc
         original_coder_output,
         first_result,
     )
-
-    class FakeSanitizerLLMAdapter:
-        def ask(self, model, system_prompt, user_prompt, json_mode=False):
-            return fix_result["output"]
-
-    monkeypatch.setattr(run_pipeline, "LLMAdapter", FakeSanitizerLLMAdapter)
 
     actions, normalized_fix_output = run_pipeline.sanitize_fix_output(
         run_id,

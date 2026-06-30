@@ -11,13 +11,19 @@ from studio.services.project_service import create_project, get_project
 from studio.services.run_service import create_run, get_run, save_stage_output
 
 VALID_FIX_OUTPUT = json.dumps(
-    [
-        {
-            "action": "write_file",
-            "path": "app/main.py",
-            "content": "def main():\n    return 'fixed'\n",
-        }
-    ]
+    {
+        "schema_version": 1,
+        "project_summary": "Repair app main.",
+        "steps": [
+            {
+                "type": "create_file",
+                "path": "app/main.py",
+                "purpose": "Application entry point",
+                "content_description": "Return fixed value",
+                "content": "def main():\n    return 'fixed'\n",
+            }
+        ],
+    }
 )
 
 
@@ -47,7 +53,18 @@ class RetryFixAdapter:
     def ask(self, model, system_prompt, user_prompt, json_mode=False):
         self.calls += 1
         if self.calls == 1:
-            return json.dumps([{"path": "app/main.py", "content": "missing action"}])
+            return json.dumps(
+                {
+                    "schema_version": 1,
+                    "steps": [
+                        {
+                            "type": "create_file",
+                            "path": "app/main.py",
+                            "purpose": "Missing content",
+                        }
+                    ],
+                }
+            )
 
         self.retry_prompt = user_prompt
         return VALID_FIX_OUTPUT
@@ -55,29 +72,23 @@ class RetryFixAdapter:
 
 class AlwaysInvalidFixAdapter:
     def ask(self, model, system_prompt, user_prompt, json_mode=False):
-        return json.dumps([{"path": "app/main.py", "content": "missing action"}])
-
-
-def fake_sanitize(run_id, fix_output):
-    if '"action"' not in fix_output:
-        raise ValueError("Missing action field")
-
-    normalized = json.dumps(json.loads(fix_output), indent=2)
-    save_stage_output(run_id, "fix_output", normalized)
-    run_pipeline.add_event(
-        run_id,
-        "fix_sanitized",
-        "static_reviewer",
-        "Fix output sanitized to Executor JSON.",
-        normalized,
-    )
-    return json.loads(fix_output), normalized
+        return json.dumps(
+            {
+                "schema_version": 1,
+                "steps": [
+                    {
+                        "type": "create_file",
+                        "path": "app/main.py",
+                        "purpose": "Still missing content",
+                    }
+                ],
+            }
+        )
 
 
 def test_malformed_fix_output_retries_then_completes(monkeypatch):
     adapter = RetryFixAdapter()
     monkeypatch.setattr(stages, "LLMAdapter", lambda: adapter)
-    monkeypatch.setattr(run_pipeline, "sanitize_fix_output", fake_sanitize)
 
     run_id, workspace, tester_result = create_fix_run()
     fix_result = run_fix_stage(run_id, str(workspace), "[]", tester_result)
@@ -105,13 +116,12 @@ def test_malformed_fix_output_retries_then_completes(monkeypatch):
     ]
     assert event_types.index("fix_sanitized") < event_types.index("fix_completed")
     assert "pipeline_failed" not in event_types
-    assert "Previous sanitizer error:" in adapter.retry_prompt
-    assert "Missing action field" in adapter.retry_prompt
+    assert "Previous Fix Agent response could not be built." in adapter.retry_prompt
+    assert "create_file step at index 0 must include content" in adapter.retry_prompt
 
 
 def test_malformed_fix_output_fails_after_retries(monkeypatch):
     monkeypatch.setattr(stages, "LLMAdapter", lambda: AlwaysInvalidFixAdapter())
-    monkeypatch.setattr(run_pipeline, "sanitize_fix_output", fake_sanitize)
 
     run_id, workspace, tester_result = create_fix_run()
     fix_result = run_fix_stage(run_id, str(workspace), "[]", tester_result)
@@ -140,7 +150,6 @@ def test_malformed_fix_output_fails_after_retries(monkeypatch):
 def test_fix_completed_never_precedes_fix_sanitized(monkeypatch):
     adapter = RetryFixAdapter()
     monkeypatch.setattr(stages, "LLMAdapter", lambda: adapter)
-    monkeypatch.setattr(run_pipeline, "sanitize_fix_output", fake_sanitize)
 
     run_id, workspace, tester_result = create_fix_run()
     fix_result = run_fix_stage(run_id, str(workspace), "[]", tester_result)
@@ -160,7 +169,6 @@ def test_fix_completed_never_precedes_fix_sanitized(monkeypatch):
 
 def test_missing_action_fix_output_regression_fails_without_pipeline_failed(monkeypatch):
     monkeypatch.setattr(stages, "LLMAdapter", lambda: AlwaysInvalidFixAdapter())
-    monkeypatch.setattr(run_pipeline, "sanitize_fix_output", fake_sanitize)
 
     run_id, workspace, tester_result = create_fix_run()
     fix_result = run_fix_stage(run_id, str(workspace), "[]", tester_result)
